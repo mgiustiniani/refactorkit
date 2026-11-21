@@ -1,5 +1,6 @@
 package org.refactorkit.java
 
+import org.eclipse.jdt.core.dom.TypeDeclaration
 import org.refactorkit.core.PlanReferenceAnalysis
 import org.refactorkit.core.PlanReferenceCompleteness
 import org.refactorkit.core.PlanReferenceEvidence
@@ -20,9 +21,9 @@ data class JavaFrameworkFieldRenameEvidence(
 )
 
 /**
- * Finds the deliberately small, source-only Spring Data JPQL cell used by entity-field rename.
+ * Finds supported static Spring Data and Jakarta Persistence JPQL property paths for entity-field rename.
  *
- * A result is never project-complete: XML/YAML/properties, JPA named queries, dynamic query
+ * A result is never project-complete: XML/YAML/properties, other named-query forms, dynamic query
  * expressions, migrations, generated metamodels, and external consumers are outside this cell.
  * Those limits are part of the returned typed analysis and prevent managed Apply.
  */
@@ -47,7 +48,7 @@ class JavaFrameworkReferenceAnalyzer {
             file.languageId == "java" && hasJpaEntityAnnotation(file) && declaresType(file.content, ownerSimpleName)
         }
         val warnings = mutableListOf(
-            "Reference closure is incomplete: only direct static Spring Data @Query JPQL property paths are inspected; JPA mappings, XML/YAML/properties, named queries, migrations, generated metamodels, reflection, and external consumers remain outside this analysis.",
+            "Reference closure is incomplete: only supported static Spring Data @Query and Jakarta @NamedQuery property paths are inspected. Other query forms, JPA mappings, XML/YAML/properties, migrations, generated metamodels, reflection, and external consumers remain outside this analysis.",
         )
         val opaqueResourcePaths = snapshot.auxiliaryFiles.asSequence()
             .map(SourceFile::path)
@@ -64,10 +65,27 @@ class JavaFrameworkReferenceAnalyzer {
         }
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
         val references = mutableListOf<PlanReferenceEvidence>()
+        fun addPropertyReference(location: SourceLocation, provenance: String) {
+            editsByPath.getOrPut(location.path) { mutableListOf() } += TextEdit(location.range, newPropertyName)
+            references += PlanReferenceEvidence(
+                languageId = "java",
+                kind = PlanReferenceKind.FRAMEWORK_ENTITY_PROPERTY,
+                targetOwner = ownerQualifiedName,
+                targetMember = oldPropertyName,
+                location = location,
+                resourceKind = PlanReferenceResourceKind.SOURCE_ANNOTATION_STRING,
+                provenance = PlanReferenceProvenance(provenance),
+                completeness = PlanReferenceCompleteness.COMPLETE,
+            )
+        }
 
+        var hasNamedReferences = false
         if (entityFiles.size != 1 || entityFiles.singleOrNull()?.path != ownerFile.path) {
             warnings += "Entity simple name '$ownerSimpleName' is ambiguous in the workspace; JPQL aliases cannot be assigned to one owner."
         } else {
+            val namedLocations = namedQueryLocations(snapshot, ownerFile, ownerQualifiedName, oldPropertyName)
+            hasNamedReferences = namedLocations.isNotEmpty()
+            namedLocations.forEach { addPropertyReference(it, "jpa.named-query-jpql") }
             snapshot.files.asSequence()
                 .filter { it.languageId == "java" }
                 .forEach { file ->
@@ -98,20 +116,9 @@ class JavaFrameworkReferenceAnalyzer {
                         propertyPattern.findAll(maskedQuery).forEach { match ->
                             val propertyGroup = requireNotNull(match.groups[1])
                             val offset = literal.contentOffset + propertyGroup.range.first
-                            val textEdit = TextEdit(
-                                TextEdits.rangeForOffset(file.content, offset, propertyGroup.value.length),
-                                newText = newPropertyName,
-                            )
-                            editsByPath.getOrPut(file.path) { mutableListOf() } += textEdit
-                            references += PlanReferenceEvidence(
-                                languageId = "java",
-                                kind = PlanReferenceKind.FRAMEWORK_ENTITY_PROPERTY,
-                                targetOwner = ownerQualifiedName,
-                                targetMember = oldPropertyName,
-                                location = SourceLocation(file.path, textEdit.range),
-                                resourceKind = PlanReferenceResourceKind.SOURCE_ANNOTATION_STRING,
-                                provenance = PlanReferenceProvenance("spring-data.query-jpql"),
-                                completeness = PlanReferenceCompleteness.COMPLETE,
+                            addPropertyReference(
+                                SourceLocation(file.path, TextEdits.rangeForOffset(file.content, offset, propertyGroup.value.length)),
+                                "spring-data.query-jpql",
                             )
                         }
                     }
@@ -123,7 +130,7 @@ class JavaFrameworkReferenceAnalyzer {
         }
         val analysis = PlanReferenceAnalysis(
             schemaVersion = "refactorkit-reference-analysis-v1",
-            scope = "java-spring-data-jpql-static-property-path-v1",
+            scope = if (hasNamedReferences) "java-jpql-static-property-path-v1" else "java-spring-data-jpql-static-property-path-v1",
             completeness = PlanReferenceCompleteness.INCOMPLETE,
             completeProject = false,
             managedWriteAuthority = "none",
@@ -133,6 +140,29 @@ class JavaFrameworkReferenceAnalyzer {
             warnings = warnings.distinct(),
         )
         return JavaFrameworkFieldRenameEvidence(analysis, sortedEdits)
+    }
+
+    private fun namedQueryLocations(
+        snapshot: ProjectSnapshot,
+        ownerFile: SourceFile,
+        owner: String,
+        property: String,
+    ): List<SourceLocation> {
+        if ("NamedQuery" !in ownerFile.content) return emptyList()
+        val resolution = JdtJavaSemanticAnalyzer().withBoundCompilationUnit(snapshot, ownerFile.path) { unit, _ ->
+            val entity = unit.types().singleOrNull() as? TypeDeclaration ?: return@withBoundCompilationUnit null
+            val binding = entity.resolveBinding() ?: return@withBoundCompilationUnit null
+            if (binding.isRecovered || binding.qualifiedName != owner || unit.problems.any { it.isError }) {
+                return@withBoundCompilationUnit null
+            }
+            val annotation = binding.annotations.singleOrNull {
+                val type = it.annotationType
+                !type.isRecovered && !type.isFromSource && type.qualifiedName == "jakarta.persistence.Entity"
+            }
+            if (annotation?.declaredMemberValuePairs?.isEmpty() != true) return@withBoundCompilationUnit null
+            JavaStaticJpqlPropertyQuery.locationsForNamedQuery(entity, ownerFile, property)
+        }
+        return (resolution as? JdtBoundCompilationUnitResolution.Available)?.value.orEmpty()
     }
 
     private fun isOpaqueQueryResource(path: Path): Boolean {

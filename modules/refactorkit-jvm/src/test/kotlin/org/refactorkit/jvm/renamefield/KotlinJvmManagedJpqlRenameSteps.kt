@@ -38,6 +38,11 @@ class KotlinJvmManagedJpqlRenameSteps {
         parent = Files.createTempDirectory("rk-managed-jpql-").toRealPath()
         workspace = Files.createDirectory(parent.resolve("workspace"))
         val mapping = if (input == "implicit column mapping") "" else "@Column(name = \"display_name\")"
+        val namedQuery = when (input) {
+            "static Jakarta named query" -> STATIC_NAMED_QUERY
+            "computed Jakarta named query" -> COMPUTED_NAMED_QUERY
+            else -> null
+        }
         val entity = """
             |package example.jpql;
             |import jakarta.persistence.Access;
@@ -55,7 +60,11 @@ class KotlinJvmManagedJpqlRenameSteps {
             |    private String amount;
             |    protected User() {}
             |}
-        """.trimMargin() + "\n"
+        """.trimMargin().let { source ->
+            if (namedQuery == null) source else source
+                .replace("import jakarta.persistence.Id;\n", "import jakarta.persistence.Id;\nimport jakarta.persistence.NamedQuery;\n")
+                .replace("@Entity\n", "@Entity\n$namedQuery\n")
+        } + "\n"
         val extra = when (input) {
             "derived query method" -> """List<User> findByAmount(String amount);"""
             "computed query value" -> """@Query("select " + "u.amount from User u") List<String> computed();"""
@@ -84,6 +93,7 @@ class KotlinJvmManagedJpqlRenameSteps {
             "AccessType" to "public enum AccessType { FIELD, PROPERTY }",
             "Column" to "public @interface Column { String name() default \"\"; }",
             "Id" to "public @interface Id {}",
+            "NamedQuery" to "public @interface NamedQuery { String name(); String query(); }",
             "Table" to "public @interface Table { String name() default \"\"; }",
         ), "jakarta.persistence")
         val repositoryJar = createFixtureJar("spring-data", mapOf(
@@ -161,7 +171,32 @@ class KotlinJvmManagedJpqlRenameSteps {
     @Then("the JPQL field rename has {string} with exact query edits and no unowned writes")
     fun verifyLifecycle(result: String) {
         val analysis = plan.getValue("referenceAnalysis").jsonObject
-        assertEquals(2, analysis.getValue("references").jsonArray.size)
+        val references = analysis.getValue("references").jsonArray.map { it.jsonObject }
+        val namedReferences = references.filter { it["provenance"]?.jsonPrimitive?.content == "jpa.named-query-jpql" }
+        val diff = plan.getValue("renderedDiff").jsonPrimitive.content.lines()
+        if (input == "static Jakarta named query") {
+            assertEquals(2, namedReferences.size, "Both references in @NamedQuery.query should be visible")
+            val line = original.getValue(ENTITY).lines().indexOf(STATIC_NAMED_QUERY)
+            val first = STATIC_NAMED_QUERY.indexOf("u.amount") + 2
+            val second = STATIC_NAMED_QUERY.lastIndexOf("u.amount") + 2
+            namedReferences.zip(listOf(first, second)).forEach { (ref, character) ->
+                assertEquals("framework.entity-property", ref.getValue("kind").jsonPrimitive.content)
+                assertEquals("java.annotation-string", ref.getValue("resourceKind").jsonPrimitive.content)
+                assertEquals("example.jpql.User", ref.getValue("targetOwner").jsonPrimitive.content)
+                assertEquals("amount", ref.getValue("targetMember").jsonPrimitive.content)
+                val location = ref.getValue("location").jsonObject
+                assertEquals(ENTITY.toString(), location.getValue("path").jsonPrimitive.content)
+                assertEquals(buildJsonObject {
+                    put("start", buildJsonObject { put("line", line); put("character", character) })
+                    put("end", buildJsonObject { put("line", line); put("character", character + "amount".length) })
+                }, location.getValue("range"))
+            }
+            assertTrue("+${STATIC_NAMED_QUERY.replace("u.amount", "u.displayName")}" in diff)
+        } else {
+            assertTrue(namedReferences.isEmpty())
+            if (input == "computed Jakarta named query") assertTrue(diff.none { it.startsWith("+@NamedQuery") })
+        }
+        assertEquals(2 + namedReferences.size, references.size)
         val apply = buildJsonObject {
             put("planId", plan.getValue("planId"))
             put("expectedSnapshotHash", snapshot)
@@ -286,6 +321,10 @@ class KotlinJvmManagedJpqlRenameSteps {
     }
 
     private companion object {
+        const val STATIC_NAMED_QUERY =
+            """@NamedQuery(name = "User.readNamed", query = "select u.amount from User u where u.amount is not null")"""
+        const val COMPUTED_NAMED_QUERY =
+            """@NamedQuery(name = "User.readNamed", query = "select u." + "amount from User u where u.amount is not null")"""
         val ENTITY: Path = Path.of("src/main/java/example/jpql/User.java")
         val REPOSITORY: Path = Path.of("src/main/java/example/jpql/UserRepository.java")
         val MAIN_OUTPUT: Path = Path.of("target/classes")

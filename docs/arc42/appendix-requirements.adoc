@@ -11663,6 +11663,15 @@ resource paths includes the count of any additional uninspected resources.
 The daemon projects this refusal as JSON-RPC plan validation error `-32008`
 with `data.refusalCode` set to `referenceAnalysis.incomplete`.
 
+The same requirement covers preview of a directly declared Jakarta Persistence
+`@NamedQuery` on the selected, SDK-bound entity with its default entity name.
+One escape-free scalar selection can include an `is null` or `is not null`
+predicate on the same property. Each property token in the `query` member has
+an exact `java.annotation-string` location with `jpa.named-query-jpql`
+provenance. The query name is unchanged. Computed values, containers and other
+unresolved queries add no inferred location. The named-query preview remains
+incomplete and refuses managed Apply.
+
 The managed path under `REQ-JAVA-RENAME-FIELD-CHAR-001` covers a single
 provider-owned Maven module with explicit compiler and processor settings,
 an SDK-bound Jakarta Persistence entity and its Spring Data JPA repositories.

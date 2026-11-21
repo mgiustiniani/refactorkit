@@ -210,3 +210,14 @@ Ability: Rename an owner-bound Java field with exact JDT binding evidence, fall 
       | linked empty Maven output | review-only         |
       | empty Maven outputs       | late-output-refusal |
       | empty Maven outputs       | late-link-refusal   |
+
+  @REQ-JAVA-RENAME-FIELD-CHAR-001 @functional-requirement @REQ-JAVA-RENAME-FIELD-CHAR-001#named-jpql-property-ranges-are-typed-in-field-rename-preview
+  Scenario Outline: Named JPQL property ranges are typed in field rename preview
+    Given a Maven JPQL field-rename fixture with "<inputs>"
+    When the IDE previews the saved entity field rename with Maven SDK authority
+    Then the JPQL field rename has "<result>" with exact query edits and no unowned writes
+
+    Examples:
+      | inputs                       | result      |
+      | static Jakarta named query   | review-only |
+      | computed Jakarta named query | review-only |

@@ -23,7 +23,6 @@ import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceLocation
 import org.refactorkit.core.SourceSetKind
-import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.core.WorkspaceEditIdentity
 import org.refactorkit.core.WorkspaceEditSimulator
@@ -32,7 +31,6 @@ import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.StringReader
 import java.nio.file.Path
-import javax.lang.model.SourceVersion
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -51,7 +49,8 @@ internal object JavaManagedJpqlRename {
         edit: WorkspaceEdit,
         preview: PlanReferenceAnalysis,
     ): ManagedJpqlRename? {
-        if (preview.references.isEmpty() || !persistentIdentifier(from) || !persistentIdentifier(to)) return null
+        if (preview.references.isEmpty() || !JavaStaticJpqlPropertyQuery.persistentIdentifier(from) ||
+            !JavaStaticJpqlPropertyQuery.persistentIdentifier(to)) return null
         if (snapshot.semanticAnalysisAuthority !is JavaContextAuthority || !hasClosedMavenInputs(snapshot)) return null
 
         val before = inspect(snapshot, targetPath, owner, from) ?: return null
@@ -234,19 +233,8 @@ internal object JavaManagedJpqlRename {
                     ?.takeIf { it.name.identifier == "value" }?.value as? StringLiteral
                 else -> null
             } ?: return null
-            val value = literal.literalValue
-            if (file.content.substring(literal.startPosition, literal.startPosition + literal.length) != "\"$value\"") return null
-            val query = QUERY_SHAPE.matchEntire(value) ?: return null
-            val alias = query.groups["rootAlias"]!!.value
-            val selected = query.groups["selected"]!!
-            val filtered = query.groups["filtered"]
-            if (query.groups["entity"]!!.value != owner.substringAfterLast('.') || !persistentIdentifier(alias) ||
-                !alias.equals(query.groups["selectAlias"]!!.value, ignoreCase = true) || selected.value != property ||
-                (filtered != null && (filtered.value != property || !alias.equals(query.groups["filterAlias"]!!.value, ignoreCase = true)))
-            ) return null
-            listOfNotNull(selected, filtered).map { token ->
-                SourceLocation(file.path, TextEdits.rangeForOffset(file.content, literal.startPosition + 1 + token.range.first, token.value.length))
-            }
+            JavaStaticJpqlPropertyQuery.propertyLocations(file, literal, owner.substringAfterLast('.'), property)
+                ?: return null
         }
     }
 
@@ -265,9 +253,6 @@ internal object JavaManagedJpqlRename {
 
     private fun external(type: ITypeBinding, name: String): Boolean =
         !type.isRecovered && !type.isFromSource && type.qualifiedName == name
-
-    private fun persistentIdentifier(name: String): Boolean =
-        IDENTIFIER.matches(name) && !SourceVersion.isKeyword(name) && name.lowercase() !in JPQL_KEYWORDS
 
     private fun closedPom(text: String): Boolean {
         return try {
@@ -337,18 +322,4 @@ internal object JavaManagedJpqlRename {
     private const val COLUMN = "jakarta.persistence.Column"
     private const val ID = "jakarta.persistence.Id"
     private const val QUERY = "org.springframework.data.jpa.repository.Query"
-    private const val WORD = "[A-Za-z][A-Za-z0-9_]*"
-    private val IDENTIFIER = Regex(WORD)
-    private val QUERY_SHAPE = Regex(
-        "\\s*(?i:select)\\s+(?<selectAlias>$WORD)\\s*\\.\\s*(?<selected>$WORD)" +
-            "\\s+(?i:from)\\s+(?<entity>$WORD)\\s+(?:(?i:as)\\s+)?(?<rootAlias>$WORD)" +
-            "(?:\\s+(?i:where)\\s+(?<filterAlias>$WORD)\\s*\\.\\s*(?<filtered>$WORD)\\s+(?i:is)(?:\\s+(?i:not))?\\s+(?i:null))?\\s*",
-    )
-    private val JPQL_KEYWORDS = """
-        abs all and any as asc avg between bit_length both by case char_length character_length class coalesce concat count
-        current_date current_time current_timestamp delete desc distinct else empty end entry escape exists false fetch from
-        group having in index inner is join key leading left length like local_date local_datetime local_time locate lower
-        max member min mod new not null nullif object of on or order outer position right select set size some sqrt
-        substring sum then trailing treat trim true type union update upper value when where
-    """.trim().split(Regex("\\s+")).toSet()
 }
