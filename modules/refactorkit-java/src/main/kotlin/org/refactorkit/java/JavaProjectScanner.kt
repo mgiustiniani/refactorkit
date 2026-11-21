@@ -41,14 +41,20 @@ class JavaProjectScanner(
     private val selectedMavenDescriptorAuthority: MavenSelectedDescriptorAuthorityContext? = null,
     private val effectiveGradleModelProvider: ((Path) -> org.refactorkit.core.BuildModel?)? = null,
     private val effectiveGradleEvidenceProvider: ((Path) -> List<ClasspathEvidence>)? = null,
-    private val mavenRuntime: MavenRuntimeSelection? = null,
 ) {
     fun scan(root: Path): ProjectSnapshot = scanInternal(root, includeBuildModels = true)
+
+    fun scan(root: Path, mavenRuntime: MavenRuntimeSelection?): ProjectSnapshot =
+        scanInternal(root, includeBuildModels = true, mavenRuntime = mavenRuntime)
 
     internal fun scanWithoutBuildModels(root: Path): ProjectSnapshot =
         scanInternal(root, includeBuildModels = false)
 
-    private fun scanInternal(root: Path, includeBuildModels: Boolean): ProjectSnapshot {
+    private fun scanInternal(
+        root: Path,
+        includeBuildModels: Boolean,
+        mavenRuntime: MavenRuntimeSelection? = null,
+    ): ProjectSnapshot {
         val normalizedRoot = root.toAbsolutePath().normalize()
         DeclaredJavaProjectProvider().captureIfDeclared(normalizedRoot, includeBuildModels)?.let { return it }
         val discoveredModuleRoots = detectModuleRoots(normalizedRoot)

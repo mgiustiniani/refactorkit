@@ -179,7 +179,7 @@ class DaemonSession(
 ) : AutoCloseable {
     private val adapter = JavaLanguageAdapter()
     private val moveClassDispatcher = JavaMoveClassOperationDispatcher(adapter)
-    private var scanner = JavaProjectScanner()
+    private var scanJava: (Path) -> ProjectSnapshot = JavaProjectScanner()::scan
     private val gradleContextSession = org.refactorkit.java.JavaGradleContextSession()
     private val javaEditorOverlaySession = org.refactorkit.java.JavaEditorOverlaySession()
     private val javaEditorMutationSession = org.refactorkit.java.JavaEditorMutationSession(javaEditorOverlaySession)
@@ -414,7 +414,7 @@ class DaemonSession(
             throw JsonRpcException(JsonRpcErrorCodes.INVALID_PARAMS, failure.message ?: "Invalid Maven project selection")
         }
         gradleContextSession.clear()
-        scanner = JavaProjectScanner(
+        val scanner = JavaProjectScanner(
             allowNetworkDependencyResolution = resolveDependencies,
             localMavenRepository = params.string("mavenRepository")?.let(Paths::get)
                 ?: Path.of(System.getProperty("user.home"), ".m2", "repository"),
@@ -422,8 +422,8 @@ class DaemonSession(
             inactiveMavenProfiles = selection.inactiveProfiles,
             effectiveGradleModelProvider = gradleContextSession::modelFor,
             effectiveGradleEvidenceProvider = gradleContextSession::evidenceFor,
-            mavenRuntime = mavenRuntime,
         )
+        scanJava = { path -> scanner.scan(path, mavenRuntime) }
         val path = Paths.get(root).toAbsolutePath().normalize()
         withSourceCaptureRefusal { OwnedSourceInventoryReader.requireOwnedRoot(path) }
         val recoveryErrors = PatchEngine(path).inspectRecovery()
@@ -2163,7 +2163,7 @@ class DaemonSession(
         val currentKotlinToolchain = kotlinToolchain
         val snapshot = WorkspaceSnapshotComposer().composeInventoryFirst(
             root = root,
-            authoritativeBaseScanner = scanner::scan,
+            authoritativeBaseScanner = scanJava,
             sourceInventoryScanner = GenericProjectScanner(SCRIPT_EXTENSIONS)::scan,
             conditionalEvidenceAttacher = { snapshot -> TypeScriptBuildModelIntegration.attach(snapshot) },
             finalEvidenceAttacher = currentKotlinToolchain?.let { toolchain ->
