@@ -8710,9 +8710,10 @@ project path. It preserves other dependency declarations and supported
 application, compiler, repository and test configuration byte for byte. The two
 IDE fixture projects pass packaged daemon Apply, offline tests and Java execution
 on independent copies, followed by exact rollback, with Gradle 9.8.1 and JDK 21.
-The AppImage replay for this expanded case remains actionable. Dynamic or
-ambiguous declarations, dependency hooks and unqualified external consumers
-retain the typed inbound-dependency refusal.
+The AppImage replay on X11 and KWin Wayland passed both fixtures on each backend,
+with 36 steps and four exact rollbacks across the two runs. Dynamic or ambiguous
+declarations, dependency hooks and unqualified external consumers retain the
+typed inbound-dependency refusal.
 
 This route does not implement physical Gradle module relocation or any mixed
 Maven/Gradle ownership transform. Gradle dependency and source-set transforms and
