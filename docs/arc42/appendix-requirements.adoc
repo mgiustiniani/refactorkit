@@ -9680,7 +9680,11 @@ Temurin 8, used Maven 3.9.16 offline on Temurin 21, and obtained the same Java 8
 result before Apply, after Apply and after byte-exact rollback. The archive,
 wire and Maven receipts are under
 `.refactorkit/runs/v080-ide-java-extract-delegate-20261121-r001/`.
-Native consuming IDE qualification is actionable.
+The AppImage `d50e57c6` used the same 225 runtime files on X11
+(`run-jwXQ9X`) and KWin Wayland (`run-9mRQZ9`). Both runs passed eight GUI
+steps, including the incomplete-group refusal with Apply disabled, saved
+selection, Apply, offline Maven with four tests, and byte-exact rollback.
+Both IDE sessions closed with zero surviving processes.
 
 === Java extractVariable bounded operation — 2026-10-24
 
