@@ -1310,6 +1310,7 @@ class JavaLanguageAdapter(
         "inlineConstant" -> applyInlineConstant(request)
         "inlineMethod" -> applyInlineMethod(request)
         "introduceParameterObject" -> applyIntroduceParameterObject(request)
+        "extractDelegate" -> applyExtractDelegate(request)
         "pullUpMember" -> applyPullUpMember(request)
         "pushDownMember" -> applyPushDownMember(request)
         "moveMember" -> applyMoveMember(request)
@@ -1754,6 +1755,24 @@ class JavaLanguageAdapter(
         }
         return JavaIntroduceParameterObjectPlanner(this).preview(
             request.snapshot, JavaIntroduceParameterObjectRequest(path, bindingKey, typeName, parameters),
+        )
+    }
+
+    private fun applyExtractDelegate(request: RefactoringRequest): PatchPlan {
+        val path = request.arguments["file"]?.let { runCatching { Path.of(it).normalize() }.getOrNull() }
+        val bindingKey = request.arguments["bindingKey"]?.takeIf(String::isNotBlank)
+        val typeName = request.arguments["typeName"]
+        val members = request.arguments["members"]?.let { encoded ->
+            (runCatching { Json.parseToJsonElement(encoded) }.getOrNull() as? JsonArray)?.map {
+                (it as? JsonPrimitive)?.takeIf(JsonPrimitive::isString)?.content ?: return@let null
+            }
+        }
+        if (path == null || bindingKey == null || typeName == null || members == null) {
+            return refused(request, "java.extractDelegate.invalidRequest",
+                "An exact Java method binding, type name and a list of member names are required.")
+        }
+        return JavaExtractDelegatePlanner(this).preview(
+            request.snapshot, JavaExtractDelegateRequest(path, bindingKey, typeName, members),
         )
     }
 

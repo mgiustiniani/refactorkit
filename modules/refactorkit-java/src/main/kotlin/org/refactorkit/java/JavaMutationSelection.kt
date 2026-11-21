@@ -116,7 +116,7 @@ object JavaMutationSelectionService {
             operation in setOf("renameClass", "moveClass") -> actual.symbolKind in typeKinds
             operation == "renameMember" -> actual.symbolKind in setOf(Symbol.Kind.METHOD, Symbol.Kind.FIELD, Symbol.Kind.RECORD_COMPONENT)
             operation == "safeDelete" -> actual.symbolKind in typeKinds || actual.symbolKind in setOf(Symbol.Kind.METHOD, Symbol.Kind.FIELD)
-            operation in setOf("makeStatic", "inlineMethod", "changeVisibility", "introduceParameterObject") -> actual.symbolKind == Symbol.Kind.METHOD
+            operation in setOf("makeStatic", "inlineMethod", "changeVisibility", "introduceParameterObject", "extractDelegate") -> actual.symbolKind == Symbol.Kind.METHOD
             operation in setOf("changeType", "encapsulateField") -> actual.symbolKind == Symbol.Kind.FIELD
             operation.startsWith("changeSignature.") || operation in setOf("renameParameter", "changeParameterType", "addParameter", "reorderParameters", "removeParameter") -> actual.symbolKind in setOf(Symbol.Kind.METHOD, Symbol.Kind.CONSTRUCTOR)
             operation in setOf("formatFile", "organizeImports") -> {

@@ -31,6 +31,7 @@ import org.junit.platform.suite.api.Suite
 @IncludeEngines("cucumber")
 @SelectClasspathResource("java-inline-method-refusal.feature")
 @SelectClasspathResource("java-introduce-parameter-object.feature")
+@SelectClasspathResource("java-extract-delegate.feature")
 @ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.inlinemethodrefusal,org.refactorkit.jvm.refusals")
 @ConfigurationParameter(
     key = PLUGIN_PROPERTY_NAME,
