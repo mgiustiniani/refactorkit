@@ -3228,7 +3228,10 @@ class DaemonSession(
             is ApplyResult.Refused -> {
                 pendingPlans.remove(planId)
                 val msg = result.diagnostics.joinToString("; ") { it.message }
-                throw JsonRpcException(JsonRpcErrorCodes.applyRefusalCode(result.diagnostics), msg)
+                val data = result.diagnostics.singleOrNull()?.code
+                    ?.takeIf { it == "referenceAnalysis.incomplete" }
+                    ?.let { refusalCode -> buildJsonObject { put("refusalCode", refusalCode) } }
+                throw JsonRpcException(JsonRpcErrorCodes.applyRefusalCode(result.diagnostics), msg, data)
             }
         }
     }

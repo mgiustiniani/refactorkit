@@ -14,6 +14,8 @@ import org.refactorkit.core.FileEdit
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.DiagnosticsGate
+import org.refactorkit.core.JsonRpcErrorCodes
+import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.PatchEngine
@@ -128,7 +130,7 @@ class KotlinJvmRenameFieldCharacterizationSteps(private val context: KotlinJvmRe
     @Given("^a JPA entity field whose property is referenced by a static Spring Data JPQL query$")
     fun jpaEntityFieldWithStaticSpringDataQuery() {
         val root = temporaryDirectory("rk-jvm-renamefield-framework-query")
-        writePom(root, "src/main/java")
+        writePom(root, "src/main/java", javaRelease = 21)
         write(
             root,
             "src/main/java/jakarta/persistence/Entity.java",
@@ -522,6 +524,48 @@ class KotlinJvmRenameFieldCharacterizationSteps(private val context: KotlinJvmRe
                     it.jsonObject.getValue("provenance").jsonPrimitive.content == "spring-data.query-jpql"
             }, protocolReferences.toString())
         }
+    }
+
+    @Then("^daemon Apply reports the typed incomplete-reference refusal without a transaction$")
+    fun daemonRefusesIncompleteReferenceApply() {
+        val root = requireNotNull(fixtureRoot)
+        val before = requireNotNull(snapshot).trackedFiles.associate { it.path to it.content }
+        DaemonSession().use { daemon ->
+            val opened = daemon.dispatch("project.open", buildJsonObject { put("root", root.toString()) }).jsonObject
+            val snapshotHash = opened.getValue("snapshotHash").jsonPrimitive.content
+            val sdk = System.getProperty("java.home")
+            val context = daemon.dispatch("project.context", buildJsonObject {
+                put("expectedSnapshotHash", snapshotHash)
+                put("sdkHome", sdk)
+            }).jsonObject
+            assertEquals("available", context.getValue("status").jsonPrimitive.content, context.toString())
+            val authority = buildJsonObject {
+                put("sdkHome", sdk)
+                put("expectedContextHash", context.getValue("contextHash").jsonPrimitive.content)
+                put("contextSchemaVersion", context.getValue("schemaVersion").jsonPrimitive.content)
+            }
+            val preview = daemon.dispatch("refactor.preview", buildJsonObject {
+                put("operation", "renameMember")
+                put("languageId", "java")
+                put("symbol", requireNotNull(symbolFqnWithMember))
+                put("expectedSnapshotHash", snapshotHash)
+                put("javaContext", authority)
+                put("arguments", buildJsonObject { put("newName", requireNotNull(newMemberName)) })
+            }).jsonObject
+            assertEquals("INELIGIBLE", preview.getValue("managedWriteEligibility").jsonPrimitive.content)
+            val failure = runCatching {
+                daemon.dispatch("refactor.apply", buildJsonObject {
+                    put("planId", preview.getValue("planId").jsonPrimitive.content)
+                    put("expectedSnapshotHash", snapshotHash)
+                    put("javaContext", authority)
+                })
+            }.exceptionOrNull()
+            val refused = assertIs<JsonRpcException>(failure)
+            assertEquals(JsonRpcErrorCodes.PLAN_VALIDATION_FAILED, refused.code, refused.toString())
+            assertEquals("referenceAnalysis.incomplete", refused.data?.jsonObject?.get("refusalCode")?.jsonPrimitive?.content)
+        }
+        assertEquals(before, JavaProjectScanner().scan(root).trackedFiles.associate { it.path to it.content })
+        assertTrue(!Files.exists(root.resolve(".refactorkit/transactions")))
     }
 
     // ------------------------------------------------------------ Scenario 1 Thens

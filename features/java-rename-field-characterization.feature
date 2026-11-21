@@ -173,3 +173,11 @@ Ability: Rename an owner-bound Java field with exact JDT binding evidence, fall 
       | src/main/resources/META-INF/orm.xml                     |
       | src/main/resources/META-INF/jpa-named-queries.properties  |
       | src/test/resources/queries/user.jpql                     |
+
+  @REQ-JAVA-RENAME-FIELD-CHAR-001 @functional-requirement @REQ-JAVA-RENAME-FIELD-CHAR-001#incomplete-jpql-field-rename-apply-returns-a-typed-refusal
+  Scenario: Incomplete JPQL field rename Apply returns a typed refusal
+    Given a JPA entity field whose property is referenced by a static Spring Data JPQL query
+    And the workspace contains an opaque JPQL resource "src/main/resources/META-INF/orm.xml"
+    When the caller requests a renameMember preview for that owner-bound field with a valid new field name
+    Then the preview identifies the uninspected JPQL resource "src/main/resources/META-INF/orm.xml"
+    And daemon Apply reports the typed incomplete-reference refusal without a transaction

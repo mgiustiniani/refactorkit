@@ -11660,6 +11660,8 @@ retains the binding-selected Java edits and the exact supported static
 `@Query` property ranges. Managed Apply refuses with
 `referenceAnalysis.incomplete` before any file mutation. The bounded list of
 resource paths includes the count of any additional uninspected resources.
+The daemon projects this refusal as JSON-RPC plan validation error `-32008`
+with `data.refusalCode` set to `referenceAnalysis.incomplete`.
 
 The first managed case is actionable in the Java adapter. It needs a complete
 provider-owned Maven workspace, a binding-selected private entity field with
