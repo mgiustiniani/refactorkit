@@ -11675,6 +11675,14 @@ Apply. Opaque resources, implicit target-column mappings, derived methods
 and computed query values keep the captured references in review-only mode.
 The verifier reads the selected Maven model without running build plugins.
 
+The standard Maven output directories `target/classes` and
+`target/test-classes` may be absent or empty. The provider checks the declared
+paths through workspace-owned directory handles without following links.
+Nonempty output, an output link or unreadable content blocks managed Apply.
+The same operation lease revalidates the output condition under the workspace
+lock before Apply and again immediately before the transaction journal. A
+new generated file or a link introduced after preview refuses Apply.
+
 The managed Story passes Apply and byte-exact rollback and the four
 review-only controls. A separate replay with the packaged daemon, official
 Jakarta Persistence and Spring Data APIs, Hibernate and H2 executes the

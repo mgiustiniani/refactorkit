@@ -370,6 +370,9 @@ class PatchEngine(
                 "observedWorkspaceEditSha256" to observedWorkspaceEditSha256,
             )),
         ))
+        if (lease.requiresEmptyBuildOutputDirectories) {
+            validateEmptyBuildOutputDirectories(snapshot)?.let { return listOf(it) }
+        }
 
         // Non-managed source evidence is the narrowest freshness boundary and must win
         // diagnostic precedence over the broader engine-owned snapshot drift check.
@@ -1628,6 +1631,9 @@ class PatchEngine(
         if (plan.authorityLease?.requiresExactWorkspaceInventory == true) {
             validateTrackedWorkspaceInventory(snapshot)?.let { return ApplyResult.Refused(listOf(it)) }
         }
+        if (plan.authorityLease?.requiresEmptyBuildOutputDirectories == true) {
+            validateEmptyBuildOutputDirectories(snapshot)?.let { return ApplyResult.Refused(listOf(it)) }
+        }
         try {
             transactionLog.prepare(record)
             transactionLog.update(record.copy(state = JournalState.APPLYING))
@@ -1664,6 +1670,18 @@ class PatchEngine(
                 },
             )))
         }
+    }
+
+    private fun validateEmptyBuildOutputDirectories(snapshot: ProjectSnapshot): Diagnostic? = try {
+        OwnedSourceInventoryReader.requireEmptyBuildOutputDirectories(snapshot)
+        null
+    } catch (failure: OwnedSourceCaptureException) {
+        Diagnostic(
+            "Declared build output directories must remain absent or empty before Apply (" +
+                failure.code.name + "); rescan and regenerate the plan",
+            Diagnostic.Severity.ERROR,
+            code = "snapshot.buildOutputDirectoriesChanged",
+        )
     }
 
     private fun validateTrackedWorkspaceInventory(snapshot: ProjectSnapshot): Diagnostic? {

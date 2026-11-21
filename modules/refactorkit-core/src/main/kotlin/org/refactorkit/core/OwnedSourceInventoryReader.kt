@@ -66,6 +66,24 @@ class OwnedSourceInventoryReader(
             ).capture(root).regularPaths.mapTo(linkedSetOf(), root::relativize)
         }
 
+        /** Verify every declared output root through owned handles, including in otherwise ignored trees. */
+        fun requireEmptyBuildOutputDirectories(snapshot: ProjectSnapshot) {
+            val root = snapshot.workspace.root.toAbsolutePath().normalize()
+            val outputs = snapshot.buildModels.flatMap(BuildModel::modules).flatMap(BuildModule::sourceSets)
+                .flatMap(BuildSourceSet::outputDirectories).map(Path::normalize).distinct()
+            val policy = SourceCapturePolicy()
+            if (outputs.isEmpty() || outputs.any { it.toString().isBlank() }) {
+                throw OwnedSourceCaptureException(OwnedSourceCaptureFailure.OWNERSHIP_UNAVAILABLE, root)
+            }
+            if (outputs.size > policy.maxEntries) {
+                throw OwnedSourceCaptureException(OwnedSourceCaptureFailure.ENTRIES_EXCEEDED, root)
+            }
+            OwnedSourceCapture(
+                policy, emptyMap(), emptySet(), caseSensitiveExtensions = true, allowMissingRoot = false,
+                ignoreRootDirectory = false, selectedRoots = outputs, requireEmptySelectedRoots = true,
+            ).capture(root)
+        }
+
         /** Bounded opaque UTF-8 input acquisition; unavailable is an explicit typed failure, never absence. */
         fun readWorkspaceTextInput(root: Path, relative: Path, maxBytes: Int): OwnedWorkspaceTextReadout {
             require(maxBytes in 1..MAX_WORKSPACE_INPUT_BYTES)
@@ -102,6 +120,7 @@ private class OwnedSourceCapture(
     private val selectedInput: Path? = null,
     private val inputByteBound: Int? = null,
     private val requireRegularEntries: Boolean = false,
+    private val requireEmptySelectedRoots: Boolean = false,
 ) {
     private var entries = 0
     private var totalBytes = 0
@@ -207,7 +226,19 @@ private class OwnedSourceCapture(
     private fun visitSelectedRoot(directory: SecureDirectoryStream<Path>, root: Path, relative: Path, index: Int) {
         val depth = if (relative.toString().isEmpty()) 0 else relative.nameCount
         if (depth > policy.maxDepth) unavailable(OwnedSourceCaptureFailure.DEPTH_EXCEEDED, root.resolve(relative))
-        if (index == depth) { visit(directory, root, relative, depth); return }
+        if (index == depth) {
+            if (requireEmptySelectedRoots) {
+                val display = root.resolve(relative)
+                val before = attributes(directory)
+                requireIdentity(before, display)
+                if (directory.iterator().hasNext() || !sameIdentity(before, attributes(directory))) {
+                    unavailable(OwnedSourceCaptureFailure.INPUT_CHANGED, display)
+                }
+            } else {
+                visit(directory, root, relative, depth)
+            }
+            return
+        }
         val before = attributes(directory)
         requireIdentity(before, root.resolve(relative))
         val name = relative.getName(index)

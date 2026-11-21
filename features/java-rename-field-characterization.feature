@@ -195,3 +195,18 @@ Ability: Rename an owner-bound Java field with exact JDT binding evidence, fall 
       | external query resource | review-only |
       | derived query method    | review-only |
       | computed query value    | review-only |
+
+  @REQ-JAVA-RENAME-FIELD-CHAR-001 @functional-requirement @REQ-JAVA-RENAME-FIELD-CHAR-001#managed-jpql-field-rename-requires-absent-or-empty-maven-outputs
+  Scenario Outline: Managed JPQL field rename requires absent or empty Maven outputs
+    Given a Maven JPQL field-rename fixture with "<inputs>"
+    When the IDE previews the saved entity field rename with Maven SDK authority
+    Then the JPQL field rename has "<result>" with exact query edits and no unowned writes
+
+    Examples:
+      | inputs                    | result              |
+      | empty Maven outputs       | managed             |
+      | compiled Maven output     | review-only         |
+      | generated Maven output    | review-only         |
+      | linked empty Maven output | review-only         |
+      | empty Maven outputs       | late-output-refusal |
+      | empty Maven outputs       | late-link-refusal   |

@@ -426,7 +426,8 @@ enum class OperationAuthorityEvidenceCompleteness {
  * exact operation/snapshot and normalized workspace edit, and that every
  * required classpath or non-managed file evidence record is revalidated under
  * the workspace lock. A planner may also require exact workspace membership
- * when its authority depends on the absence of uncaptured inputs.
+ * when its authority depends on the absence of uncaptured inputs. A lease
+ * may also require the snapshot's declared build outputs to be absent or empty.
  */
 class OperationAuthorityLease(
     val kind: String,
@@ -454,6 +455,8 @@ class OperationAuthorityLease(
     val attributes: Map<String, String> get() = attributeValues
     val requiresExactWorkspaceInventory: Boolean
         get() = attributeValues[REQUIRE_EXACT_WORKSPACE_INVENTORY] == "true"
+    val requiresEmptyBuildOutputDirectories: Boolean
+        get() = attributeValues[REQUIRE_EMPTY_BUILD_OUTPUT_DIRECTORIES] == "true"
 
     init {
         require(kind.isNotBlank()) { "operation-authority lease kind must not be blank" }
@@ -502,6 +505,7 @@ class OperationAuthorityLease(
 
     companion object {
         const val REQUIRE_EXACT_WORKSPACE_INVENTORY = "requireExactWorkspaceInventory"
+        const val REQUIRE_EMPTY_BUILD_OUTPUT_DIRECTORIES = "requireEmptyBuildOutputDirectories"
         private val SHA256 = Regex("[a-f0-9]{64}")
 
         fun fileEvidenceSha256(

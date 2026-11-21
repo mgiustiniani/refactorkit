@@ -31,7 +31,6 @@ import org.refactorkit.core.owningBuildSourceRoots
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.StringReader
-import java.nio.file.Files
 import java.nio.file.Path
 import javax.lang.model.SourceVersion
 import javax.xml.XMLConstants
@@ -72,7 +71,10 @@ internal object JavaManagedJpqlRename {
                 evidenceHash = snapshot.hash,
                 workspaceEditSha256 = WorkspaceEditIdentity.sha256(edit),
                 requiredClasspathEvidence = snapshot.classpathEvidence,
-                attributes = mapOf(OperationAuthorityLease.REQUIRE_EXACT_WORKSPACE_INVENTORY to "true"),
+                attributes = mapOf(
+                    OperationAuthorityLease.REQUIRE_EXACT_WORKSPACE_INVENTORY to "true",
+                    OperationAuthorityLease.REQUIRE_EMPTY_BUILD_OUTPUT_DIRECTORIES to "true",
+                ),
             ),
         )
     }
@@ -94,9 +96,11 @@ internal object JavaManagedJpqlRename {
         val module = model.modules.singleOrNull() ?: return false
         if (root.resolve(module.root).normalize() != root) return false
         val main = module.sourceSets.singleOrNull { it.kind == SourceSetKind.MAIN } ?: return false
+        val mainOutputs = main.outputDirectories.map(Path::normalize).toSet()
+        val dependencyPaths = main.classpathEntries.map(Path::normalize).toSet() - mainOutputs
         val artifacts = main.resolvedArtifacts
         if (main.resolvedArtifactAvailability != BuildFactAvailability.COMPLETE ||
-            artifacts.map { it.path.normalize() }.toSet() != main.classpathEntries.map(Path::normalize).toSet() ||
+            artifacts.map { it.path.normalize() }.toSet() != dependencyPaths ||
             artifacts.any { artifact ->
                 !frameworkArtifact(artifact.coordinates.groupId, artifact.coordinates.artifactId) ||
                     artifact.extension != "jar" || artifact.classifier != null ||
@@ -110,9 +114,9 @@ internal object JavaManagedJpqlRename {
         if (processors.availability != BuildFactAvailability.COMPLETE || processors.mode != "none" ||
             processors.processorPath.isNotEmpty() || processors.processorPathEntries.isNotEmpty() || processors.processorNames.isNotEmpty()
         ) return false
-        if (module.sourceSets.any { set ->
-                set.generatedSourceRoots.isNotEmpty() || set.outputDirectories.any { Files.exists(root.resolve(it)) }
-            } || main.sourceRootEvidence.size != main.sourceRoots.size ||
+        if (module.sourceSets.any { it.generatedSourceRoots.isNotEmpty() } ||
+            module.sourceSets.flatMap { it.outputDirectories }.map(Path::normalize).toSet() != MAVEN_OUTPUT_DIRECTORIES ||
+            main.sourceRootEvidence.size != main.sourceRoots.size ||
             main.sourceRootEvidence.any { it.availability != BuildFactAvailability.COMPLETE }
         ) return false
         if (snapshot.files.any { file ->
@@ -125,6 +129,7 @@ internal object JavaManagedJpqlRename {
 
         val expected = snapshot.trackedFiles.mapTo(hashSetOf()) { it.path.normalize() }
         return try {
+            OwnedSourceInventoryReader.requireEmptyBuildOutputDirectories(snapshot)
             OwnedSourceInventoryReader.captureWorkspaceFilePaths(snapshot) == expected
         } catch (_: OwnedSourceCaptureException) {
             false
@@ -323,6 +328,7 @@ internal object JavaManagedJpqlRename {
         else -> false
     }
 
+    private val MAVEN_OUTPUT_DIRECTORIES = setOf(Path.of("target/classes"), Path.of("target/test-classes"))
     private val ARTIFACT_EVIDENCE = setOf(ClasspathEvidenceKind.SYSTEM_PATH_ARTIFACT, ClasspathEvidenceKind.LOCAL_REPOSITORY_ARTIFACT)
     private val ID_TYPES = setOf("java.lang.Long", "java.lang.Integer", "long", "int")
     private const val ENTITY = "jakarta.persistence.Entity"

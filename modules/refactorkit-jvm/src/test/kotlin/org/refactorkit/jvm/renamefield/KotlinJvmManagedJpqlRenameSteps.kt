@@ -29,10 +29,12 @@ class KotlinJvmManagedJpqlRenameSteps {
     private lateinit var context: JsonObject
     private lateinit var plan: JsonObject
     private lateinit var original: Map<Path, String>
+    private lateinit var input: String
     private val daemon = DaemonSession()
 
     @Given("a Maven JPQL field-rename fixture with {string}")
     fun workspaceWithMapping(input: String) {
+        this.input = input
         parent = Files.createTempDirectory("rk-managed-jpql-").toRealPath()
         workspace = Files.createDirectory(parent.resolve("workspace"))
         val mapping = if (input == "implicit column mapping") "" else "@Column(name = \"display_name\")"
@@ -99,8 +101,22 @@ class KotlinJvmManagedJpqlRenameSteps {
               <configuration><release>21</release><proc>none</proc></configuration></plugin></plugins></build>
             </project>
         """.trimIndent())
+        val compiled = compileSources(apiJar, repositoryJar, "before")
+        when (input) {
+            "empty Maven outputs" -> {
+                Files.createDirectories(workspace.resolve(MAIN_OUTPUT))
+                Files.createDirectories(workspace.resolve(TEST_OUTPUT))
+            }
+            "compiled Maven output" -> {
+                val classFile = Path.of("example/jpql/User.class")
+                val target = workspace.resolve(MAIN_OUTPUT).resolve(classFile)
+                Files.createDirectories(target.parent)
+                Files.copy(compiled.resolve(classFile), target)
+            }
+            "generated Maven output" -> write(workspace.resolve(TEST_OUTPUT).resolve("META-INF/orm.xml"), "<entity-mappings/>\n")
+            "linked empty Maven output" -> linkMainOutput()
+        }
         original = projectImage()
-        compileSources(apiJar, repositoryJar, "before")
     }
 
     @When("the IDE previews the saved entity field rename with Maven SDK authority")
@@ -166,6 +182,26 @@ class KotlinJvmManagedJpqlRenameSteps {
         assertEquals("COMPLETE", analysis.getValue("completeness").jsonPrimitive.content, analysis.toString())
         assertEquals("true", analysis.getValue("completeProject").jsonPrimitive.content)
         assertEquals("managed-stable", analysis.getValue("managedWriteAuthority").jsonPrimitive.content)
+        if (result.startsWith("late-")) {
+            when (result) {
+                "late-output-refusal" -> write(workspace.resolve(TEST_OUTPUT).resolve("META-INF/orm.xml"), "<entity-mappings/>\n")
+                "late-link-refusal" -> linkMainOutput()
+                else -> error("Unexpected late output fixture: $result")
+            }
+            val beforeApply = projectImage()
+            val refusal = assertFailsWith<JsonRpcException> { call("refactor.apply", apply) }
+            if (result == "late-link-refusal") {
+                assertEquals(JsonRpcErrorCodes.SNAPSHOT_CHANGED, refusal.code)
+                assertTrue(refusal.message.orEmpty().contains("build output", ignoreCase = true), refusal.message)
+                assertTrue(Files.isSymbolicLink(workspace.resolve(MAIN_OUTPUT_LINK)))
+            } else {
+                assertEquals(JsonRpcErrorCodes.PLAN_VALIDATION_FAILED, refusal.code)
+                assertEquals("java.context.snapshotStale", refusal.data?.jsonObject?.getValue("refusalCode")?.jsonPrimitive?.content)
+            }
+            assertEquals(beforeApply, projectImage())
+            assertTrue(!Files.exists(workspace.resolve(".refactorkit/transactions")))
+            return
+        }
         val applied = call("refactor.apply", apply)
         assertEquals("applied", applied.getValue("status").jsonPrimitive.content, applied.toString())
         assertEquals(original + mapOf(
@@ -181,6 +217,11 @@ class KotlinJvmManagedJpqlRenameSteps {
         assertEquals("rolledBack", rollback.getValue("status").jsonPrimitive.content)
         assertEquals(snapshot, rollback.getValue("snapshotHash").jsonPrimitive.content)
         assertEquals(original, projectImage())
+        if (input == "empty Maven outputs") {
+            listOf(MAIN_OUTPUT, TEST_OUTPUT).forEach { output ->
+                Files.newDirectoryStream(workspace.resolve(output)).use { assertTrue(!it.iterator().hasNext()) }
+            }
+        }
     }
 
     @After
@@ -196,15 +237,26 @@ class KotlinJvmManagedJpqlRenameSteps {
     private fun projectImage(): Map<Path, String> = Files.walk(workspace).use { stream ->
         stream.filter(Files::isRegularFile).toList().map { workspace.relativize(it) }
             .filterNot { it.startsWith(Path.of(".refactorkit")) }
-            .associateWith { Files.readString(workspace.resolve(it)) }
+            .associateWith { path ->
+                val charset = if (path.toString().endsWith(".class")) Charsets.ISO_8859_1 else Charsets.UTF_8
+                Files.readString(workspace.resolve(path), charset)
+            }
     }
 
-    private fun compileSources(persistence: Path, springData: Path, phase: String) {
+    private fun linkMainOutput() {
+        val target = workspace.resolve(MAIN_OUTPUT_LINK)
+        Files.createDirectories(target.parent)
+        val empty = Files.createDirectory(workspace.resolve("target/empty-output-target"))
+        Files.createSymbolicLink(target, target.parent.relativize(empty))
+    }
+
+    private fun compileSources(persistence: Path, springData: Path, phase: String): Path {
         val output = Files.createDirectory(parent.resolve(phase))
         val result = ToolProvider.getSystemJavaCompiler().run(null, null, null,
             "--release", "21", "-proc:none", "-classpath", listOf(persistence, springData).joinToString(java.io.File.pathSeparator),
             "-d", output.toString(), workspace.resolve(ENTITY).toString(), workspace.resolve(REPOSITORY).toString())
         assertEquals(0, result)
+        return output
     }
 
     private fun createFixtureJar(name: String, types: Map<String, String>, pkg: String): Path {
@@ -236,5 +288,8 @@ class KotlinJvmManagedJpqlRenameSteps {
     private companion object {
         val ENTITY: Path = Path.of("src/main/java/example/jpql/User.java")
         val REPOSITORY: Path = Path.of("src/main/java/example/jpql/UserRepository.java")
+        val MAIN_OUTPUT: Path = Path.of("target/classes")
+        val MAIN_OUTPUT_LINK: Path = MAIN_OUTPUT.resolve("linked-empty")
+        val TEST_OUTPUT: Path = Path.of("target/test-classes")
     }
 }
