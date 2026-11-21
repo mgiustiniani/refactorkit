@@ -780,6 +780,7 @@ jobs:
           output = pathlib.Path("build/qualification/k1-k2-shared/native-${{ matrix.platform }}.json")
           subprocess.run([
               sys.executable, "scripts/finalize-native-k1-k2-shared-foundations.py",
+              "--package-version-from-source",
               "--platform", "${{ matrix.platform }}",
               "--revision", "${{ github.event.pull_request.head.sha || github.sha }}",
               "--support-receipt", "build/qualification/k1-k2-shared/support-reconciliation.json",
@@ -858,6 +859,7 @@ jobs:
           output = pathlib.Path("build/qualification/k5-move-next/native-${{ matrix.platform }}.json")
           subprocess.run([
               sys.executable, "scripts/finalize-native-k5-move-next.py",
+              "--package-version-from-source",
               "--platform", "${{ matrix.platform }}",
               "--revision", "${{ github.event.pull_request.head.sha || github.sha }}",
               "--smoke-log", "build/qualification/k5-move-next/packaged-smoke.log",
@@ -955,6 +957,7 @@ jobs:
           output = pathlib.Path("build/qualification/k5-completion/native-${{ matrix.platform }}.json")
           subprocess.run([
               sys.executable, "scripts/finalize-native-k5-completion.py",
+              "--package-version-from-source",
               "--platform", "${{ matrix.platform }}",
               "--revision", "${{ github.event.pull_request.head.sha || github.sha }}",
               "--smoke-log", "build/qualification/k5-completion/packaged-smoke.log",

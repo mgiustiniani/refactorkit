@@ -161,6 +161,29 @@ class InterimLinuxQualificationSteps {
         assertEquals("\${{ github.ref_name == 'v0.7.0' || startsWith(github.ref_name, 'v0.8.') }}", mapping(publication["with"])["draft"])
     }
 
+    @Then("the {string} evidence binds the checked out package version")
+    fun nativeKotlinPackageVersion(job: String) {
+        val step = steps(mapping(mapping(ci["jobs"])[job])).single {
+            it["name"] == "Finalize fail-closed native receipt"
+        }
+        val finalizer = requireNotNull(step["run"]).toString()
+        val flag = "--package-version-from-source"
+        val selected = if (finalizer.contains("\"$flag\"")) flag else "legacy"
+        val log = Files.createTempFile("rk-native-kotlin-version-", ".log")
+        try {
+            val process = ProcessBuilder(
+                "python3", "-B", "scripts/native-kotlin-version-story-fixture.py", job, selected,
+            ).directory(repository.toFile()).redirectErrorStream(true).redirectOutput(log.toFile()).start()
+            if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                error("Native Kotlin receipt fixture timed out for $job")
+            }
+            assertEquals(0, process.exitValue(), Files.readString(log))
+        } finally {
+            Files.deleteIfExists(log)
+        }
+    }
+
     @When("the C qualification toolchain is prepared for workflow test tasks")
     fun prepareCQualificationToolchain() {
         val ciSteps = steps(mapping(mapping(ci["jobs"])["build"]))

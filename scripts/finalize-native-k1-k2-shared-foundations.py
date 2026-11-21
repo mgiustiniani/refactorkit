@@ -14,6 +14,8 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
+from native_kotlin_package_version import package_version, subject_jars
+
 PLATFORMS = {"linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-aarch64"}
 REQUIRED_SUITES = {
     "org.refactorkit.core.BuildModelsTest",
@@ -78,6 +80,7 @@ def main() -> int:
     parser.add_argument("--smoke-log", type=Path, required=True)
     parser.add_argument("--report-root", type=Path, required=True)
     parser.add_argument("--package-root", type=Path, required=True)
+    parser.add_argument("--package-version-from-source", action="store_true")
     parser.add_argument("--repository-root", type=Path, default=Path("."))
     parser.add_argument("--support-projection", type=Path,
                         default=Path("docs/releases/v0.7.0-kotlin-support.json"))
@@ -181,16 +184,16 @@ def main() -> int:
         or re.search(r'\bbuild 21\.0\.11\+10(?:-LTS)?\b', java_version) is None
     ):
         raise ValueError(f"embedded runtime is not exact qualified JDK 21.0.11+10: {java_version}")
-    library = package_root / "lib"
-    jar_paths = {path.name: path for path in library.glob("refactorkit-*-0.7.0.jar")}
-    missing_jars = sorted(REQUIRED_JARS - jar_paths.keys())
-    if missing_jars:
-        raise ValueError(f"required packaged subject jars are missing: {missing_jars}")
+    version = package_version(repository_root, options.package_version_from_source)
+    jar_paths = subject_jars(
+        package_root, REQUIRED_JARS, version, options.package_version_from_source,
+        "required packaged subject jars are missing",
+    )
 
     receipt = {
         "schemaVersion": 1,
         "status": "PASSED",
-        "scope": "v0.7.0-k1-k2-shared-foundations",
+        "scope": f"v{version}-k1-k2-shared-foundations",
         "revision": options.revision,
         "platform": options.platform,
         "detectedPlatform": actual_platform,
@@ -216,7 +219,7 @@ def main() -> int:
             "reportSha256": dict(sorted(report_hashes.items())),
         },
         "packagedSubjectJarSha256": {
-            name: sha256(jar_paths[name]) for name in sorted(REQUIRED_JARS)
+            name: sha256(path) for name, path in jar_paths.items()
         },
         "boundaries": [
             "Operation-specific Kotlin/JVM candidate rows only; no general managed-support claim.",

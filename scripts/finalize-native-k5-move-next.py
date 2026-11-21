@@ -14,6 +14,8 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
+from native_kotlin_package_version import package_version, subject_jars
+
 
 PLATFORMS = {"linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-aarch64"}
 SUITE = "org.refactorkit.jvm.KotlinJavaPublicTypeRenamePlannerTest"
@@ -188,6 +190,7 @@ def main() -> int:
     parser.add_argument("--smoke-log", type=Path, required=True)
     parser.add_argument("--report-root", type=Path, required=True)
     parser.add_argument("--package-root", type=Path, required=True)
+    parser.add_argument("--package-version-from-source", action="store_true")
     parser.add_argument("--repository-root", type=Path, default=Path("."))
     parser.add_argument("--output", type=Path, required=True)
     options = parser.parse_args()
@@ -293,12 +296,11 @@ def main() -> int:
     if not all(path.is_file() for path in (embedded_java, launcher, daemon, mcp)):
         raise ValueError("packaged runtime Java or required K5 launchers are missing")
     embedded_java_version = exact_java_version(embedded_java, "embedded runtime")
-    jar_paths = {
-        path.name: path for path in (package_root / "lib").glob("refactorkit-*-0.7.0.jar")
-    }
-    missing_jars = sorted(REQUIRED_JARS - jar_paths.keys())
-    if missing_jars:
-        raise ValueError(f"required packaged K5 subject jars are missing: {missing_jars}")
+    version = package_version(repository, options.package_version_from_source)
+    jar_paths = subject_jars(
+        package_root, REQUIRED_JARS, version, options.package_version_from_source,
+        "required packaged K5 subject jars are missing",
+    )
 
     subject_hashes: dict[str, str] = {}
     for relative in sorted(SUBJECT_FILES, key=str):
@@ -310,7 +312,7 @@ def main() -> int:
     receipt = {
         "schemaVersion": 1,
         "status": "PASSED",
-        "scope": "v0.7.0-k5-move-next",
+        "scope": f"v{version}-k5-move-next",
         "revision": options.revision,
         "platform": options.platform,
         "detectedPlatform": actual_platform,
@@ -338,7 +340,7 @@ def main() -> int:
         },
         "subjectFileSha256": subject_hashes,
         "packagedSubjectJarSha256": {
-            name: sha256(jar_paths[name]) for name in sorted(REQUIRED_JARS)
+            name: sha256(path) for name, path in jar_paths.items()
         },
         "boundaries": [
             "One plain public top-level function whole-file move with unaliased exact Kotlin imports only.",

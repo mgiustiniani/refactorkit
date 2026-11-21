@@ -24,6 +24,20 @@ Feature: Select only the admitted host during interim qualification
       | release           | v0.8.0       | linux only       |
       | release           | v1.0.0       | stable matrix    |
 
+  @REQ-C-INTERIM-HOST-001
+  @REQ-C-INTERIM-HOST-001#native-kotlin-qualification-binds-the-checked-out-package-version
+  Scenario Outline: Native Kotlin qualification binds the checked out package version
+    Given an interim qualification request uses "push" and "main"
+    When the repository workflow selects its qualification jobs
+    Then the "<job>" evidence binds the checked out package version
+    And interim selection preserves native verification and historical release guards
+
+    Examples:
+      | job                              |
+      | k1-k2-shared-foundations-native  |
+      | k5-move-next-native               |
+      | k5-bounded-completion-native     |
+
   @REQ-C-INTERIM-HOST-001#ci-and-the-v0-8-release-test-c-against-the-attested-clang-toolchain
   @ci-exact-clang-toolchain
   Scenario: CI and the v0.8 release test C against the attested Clang toolchain

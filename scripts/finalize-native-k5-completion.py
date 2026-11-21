@@ -13,11 +13,13 @@ import re
 import subprocess
 import xml.etree.ElementTree as ET
 
+from native_kotlin_package_version import package_version, subject_jars
+
 
 PLATFORMS = {"linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-aarch64"}
 REQUIREMENT = Path("docs/requirements/kotlin-k5-bounded-completion.md")
 REQUIREMENT_SHA256 = "4807176539f6b3e97d547df46705e5b80593acf6f28e22cffb7f477e88291894"
-BOUND_REQUIREMENTS = {
+HISTORICAL_BOUND_REQUIREMENTS = {
     Path("docs/requirements/kotlin-jvm-organize-imports-callables-formatting.md"):
         "0d28daa17f8d1a92097503125b405775d1ff2ff73361e1674b57643bec3c9a6e",
     Path("docs/requirements/kotlin-jvm-change-signature-parameter-rename.md"):
@@ -26,6 +28,11 @@ BOUND_REQUIREMENTS = {
         "16386a71f2eb579f5f126664f53fba25a775a87f0e680e86ad102146a4b51b77",
     Path("docs/requirements/kotlin-advanced-shapes-and-platform-matrices.md"):
         "5d5960b1e0f90a1f2502b48114179a1a289cc7c09ee144fa4e1933970c5b0238",
+}
+BOUND_REQUIREMENTS = {
+    **HISTORICAL_BOUND_REQUIREMENTS,
+    Path("docs/requirements/kotlin-advanced-shapes-and-platform-matrices.md"):
+        "ad1effbc01a3e98f375fb3e00d6e87273e669e4c960d53c12e042cf144a973d3",
 }
 SMOKE_MARKER = (
     "Packaged K5 completion acceptance passed: callable imports, parameter rename, "
@@ -213,6 +220,7 @@ def main() -> int:
     parser.add_argument("--compatibility-smoke-log", type=Path, required=True)
     parser.add_argument("--report-root", type=Path, required=True)
     parser.add_argument("--package-root", type=Path, required=True)
+    parser.add_argument("--package-version-from-source", action="store_true")
     parser.add_argument("--repository-root", type=Path, default=Path("."))
     parser.add_argument("--output", type=Path, required=True)
     options = parser.parse_args()
@@ -250,7 +258,9 @@ def main() -> int:
         raise ValueError("sealed K5 completion requirement is missing or drifted")
     if not checksum.is_file() or not valid_checksum_record(checksum.read_text(encoding="utf-8").strip().split()):
         raise ValueError("sealed K5 completion checksum record is invalid")
-    for relative, expected in BOUND_REQUIREMENTS.items():
+    version = package_version(repository, options.package_version_from_source)
+    bound = BOUND_REQUIREMENTS if version == "0.8.0" else HISTORICAL_BOUND_REQUIREMENTS
+    for relative, expected in bound.items():
         path = repository / relative
         if not path.is_file() or sha256(path) != expected:
             raise ValueError(f"bound K5 completion requirement is missing or drifted: {relative}")
@@ -299,10 +309,10 @@ def main() -> int:
     if not embedded_java.is_file():
         raise ValueError("embedded package Java is missing")
     embedded_version = exact_java_version(embedded_java, "embedded Java")
-    jars = sorted((package_root / "lib").glob("refactorkit-*-0.7.0.jar"))
-    jar_map = {path.name: sha256(path) for path in jars if path.name in REQUIRED_JARS}
-    if set(jar_map) != REQUIRED_JARS:
-        raise ValueError(f"packaged subject JARs differ from exact set: {sorted(jar_map)}")
+    jars = subject_jars(
+        package_root, REQUIRED_JARS, version, options.package_version_from_source,
+        "required packaged K5 subject jars are missing",
+    )
 
     missing = sorted(str(path) for path in SUBJECT_FILES if not (repository / path).is_file())
     if missing:
@@ -312,7 +322,7 @@ def main() -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     receipt = {
         "schemaVersion": 1,
-        "scope": "v0.7.0-k5-bounded-completion",
+        "scope": f"v{version}-k5-bounded-completion",
         "status": "PASSED",
         "revision": current_revision,
         "platform": options.platform,
@@ -320,12 +330,12 @@ def main() -> int:
         "requirement": {
             "path": REQUIREMENT.as_posix(), "sha256": REQUIREMENT_SHA256,
             "checksumRecordSha256": sha256(checksum),
-            "bound": {path.as_posix(): digest for path, digest in BOUND_REQUIREMENTS.items()},
+            "bound": {path.as_posix(): digest for path, digest in bound.items()},
         },
         "junit": {"totalRequiredTests": sum(map(len, REQUIRED_SUITES.values())), "suites": suites},
         "packagedSmokeSha256": sha256(options.smoke_log),
         "packagedCompatibilitySmokeSha256": sha256(options.compatibility_smoke_log),
-        "packagedSubjectJarSha256": dict(sorted(jar_map.items())),
+        "packagedSubjectJarSha256": {name: sha256(path) for name, path in jars.items()},
         "subjectFileSha256": subject_hashes,
         "host": {
             "system": host_platform.system(), "machine": host_platform.machine(),
