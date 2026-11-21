@@ -190,7 +190,10 @@
         "name": "project.open",
         "stability": "beta-contract",
         "requiresProject": false,
-        "writesWorkspace": false
+        "writesWorkspace": false,
+        "features": {
+          "mavenRuntime": true
+        }
       },
       {
         "name": "project.sync",
@@ -213,8 +216,11 @@
         "requiresProject": true,
         "writesWorkspace": false,
         "features": {
+          "typedSchemaV2": true,
+          "typedSchemaV3": true,
+          "providerQualifiedSourceAssociation": true,
+          "sourceSetKindSelection": true,
           "snapshotBound": true,
-          "gradleBuildTreeProjectPath": true,
           "configuredSdkEvidence": true,
           "orderedCompileRuntimeClasspaths": true,
           "sharedJdtBuildContext": true,
@@ -222,21 +228,19 @@
           "gradleEffectiveContext": true,
           "gradlePartialContext": true,
           "gradleCompositeBuildIdentity": true,
+          "gradleBuildTreeProjectPath": true,
           "sourceAssociation": true,
           "staleEvidenceRefusal": true,
-          "javaQueriesUseContextAuthority": true,
-          "javaRefactoringsUseContextAuthority": true,
-          "immutableJavaEditorOverlays": true,
-          "managedMutationAuthority": true,
-          "typedSchemaV2": true,
-          "typedSchemaV3": true,
-          "providerQualifiedSourceAssociation": true,
           "sourceRootProvenance": true,
           "compilerOptions": true,
           "resolvedArtifactCoordinates": true,
           "annotationProcessorContext": true,
           "jpmsModulePath": true,
-          "requiredFactRefusals": true
+          "requiredFactRefusals": true,
+          "javaQueriesUseContextAuthority": true,
+          "javaRefactoringsUseContextAuthority": true,
+          "immutableJavaEditorOverlays": true,
+          "managedMutationAuthority": true
         }
       },
       {
@@ -398,10 +402,35 @@
           "hover": true,
           "immutableEditorOverlayHover": true,
           "javaSavedSnapshotHover": true,
+          "javaImmutableEditorOverlayDiagnostics": true,
+          "javaEntryPointsClassicDeclared": true,
+          "javaEntryPointsEnclosingType": true,
+          "javaEntryPointsBoundedFrame": true,
+          "javaEntryPointsCancellation": true,
+          "javaEntryPointsInherited": false,
+          "javaEntryPointsJava25": false,
+          "javaEntryPointsV2": true,
+          "javaEntryPointsV2Inherited": true,
+          "javaEntryPointsV2Java25": true,
+          "javaEntryPointsV2SavedSnapshot": true,
           "signatureHelp": true,
           "immutableEditorOverlaySignatureHelp": true,
           "definitionAtPosition": true,
           "javaSavedSnapshotDefinition": true,
+          "kotlinDefinitionToolchain": true,
+          "typeDefinitionAtPosition": true,
+          "javaSavedSnapshotTypeDefinition": true,
+          "javaImmutableEditorOverlayTypeDefinition": true,
+          "typeHierarchyAtPosition": true,
+          "javaSavedSnapshotTypeHierarchy": true,
+          "javaImmutableEditorOverlayTypeHierarchy": true,
+          "callHierarchyAtPosition": true,
+          "javaSavedSnapshotCallHierarchy": true,
+          "javaImmutableEditorOverlayCallHierarchy": true,
+          "javaResolvedClasspathCallHierarchyTargets": true,
+          "implementationsAtPosition": true,
+          "javaSavedSnapshotImplementations": true,
+          "javaImmutableEditorOverlayImplementations": true,
           "snapshotKeyedJdtCache": true,
           "referencesAtPosition": true,
           "javaSavedSnapshotReferences": true,
@@ -496,7 +525,12 @@
         "name": "kotlin.semantic.start",
         "stability": "experimental",
         "requiresProject": true,
-        "writesWorkspace": false
+        "writesWorkspace": false,
+        "features": {
+          "explicitToolchain": true,
+          "hashBoundProvenance": true,
+          "noBuildExecution": true
+        }
       },
       {
         "name": "kotlin.semantic.stop",
@@ -510,11 +544,9 @@
         "requiresProject": true,
         "writesWorkspace": false,
         "features": {
+          "compilerBacked": true,
           "semanticLease": true,
-          "snapshotAttestation": true,
-          "compilerAttestation": true,
-          "boundedProcess": true,
-          "lineOnlyPrecision": true
+          "processAttestation": true
         }
       },
       {
@@ -523,13 +555,10 @@
         "requiresProject": true,
         "writesWorkspace": false,
         "features": {
-          "semanticLease": true,
-          "snapshotAttestation": true,
           "compilerBacked": true,
-          "durableJvmTypeIds": true,
-          "exactUtf16Ranges": true,
+          "exactUtf16Range": true,
           "documentFilter": true,
-          "boundedResponse": true
+          "semanticLease": true
         }
       },
       {
@@ -538,11 +567,9 @@
         "requiresProject": true,
         "writesWorkspace": false,
         "features": {
-          "semanticLease": true,
-          "snapshotAttestation": true,
           "compilerBacked": true,
           "opaqueSymbolId": true,
-          "exactUtf16Ranges": true
+          "semanticLease": true
         }
       },
       {
