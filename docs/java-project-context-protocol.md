@@ -61,6 +61,11 @@ through the provider's typed model and returns the concrete source-set ID in
 Failsafe declaration DTO, call `project.context.v4` with the same context parameters
 and a `providerId`.
 
+For source/target analysis with a selected SDK, `java.context.compilerOptionsIncomplete`
+indicates that effective compiler options are incomplete. The Maven compiler
+plugin bound by the default lifecycle can vary with the Maven distribution.
+With an omitted `sdkHome`, project context returns `java.context.sdkRequired`.
+
 ## Aggregate context after Gradle sync
 
 After `project.sync` has explicitly evaluated a Gradle workspace, call

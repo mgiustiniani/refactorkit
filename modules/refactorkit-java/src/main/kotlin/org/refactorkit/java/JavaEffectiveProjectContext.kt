@@ -168,6 +168,9 @@ internal object JavaSourceSetPlatformContext {
 
     fun profile(set: BuildSourceSet, authorities: Map<Int, JavaReleasePlatformAuthority>): Int {
         set.attributes["java.release"]?.let { return requireSupportedJavaProjectSourceLevel(it, null) }
+        if (authorities.isEmpty()) throw JavaContextAuthorityException(
+            "java.platform.explicitJdkRequired", "Source/target compilation requires an explicit qualified JDK platform",
+        )
         val target = requireSourceTarget(set)
         val profile = authorities.values.singleOrNull { it.release == it.platformRelease }?.release
             ?: throw JavaContextAuthorityException("java.platform.explicitJdkRequired",
@@ -184,7 +187,8 @@ internal object JavaSourceSetPlatformContext {
             "java.platform.compilerApiUnqualified", detail,
         )
         if (set.compilerOptionsAvailability != BuildFactAvailability.COMPLETE) throw JavaContextAuthorityException(
-            "java.platform.explicitJdkRequired", "Source/target compilation requires complete compiler facts and an explicit SDK",
+            set.compilerOptionsRefusalCode ?: "java.context.compilerOptionsUnavailable",
+            "Source/target compilation requires complete effective compiler options for source set ${set.id}",
         )
         val options = set.compilerOptions
         if (options.any { it.redacted || it.name in setOf("release", "compilerArgFile", "compilerArgs", "compilerArgument", "compilerArguments", "bootclasspath", "system", "enablePreview", "executable") ||

@@ -506,6 +506,19 @@ Feature: Expose snapshot-bound Java effective project context to integration con
     Then the analysis refuses with "java.platform.explicitJdkRequired" before host platform fallback
     And context acquisition preserves project bytes and executes no build or debugger
 
+  @REQ-JAVA-PROJECT-CONTEXT-001#maven-source-target-context-distinguishes-compiler-facts-from-sdk-selection
+  Scenario Outline: Maven source-target context distinguishes compiler facts from SDK selection
+    Given a Maven source-target 17 project with "<compiler>" compiler binding
+    When public Maven project context is requested with "<sdk>" SDK selection
+    Then the Maven compiler authority response is "<status>" with refusal "<refusal>"
+    And context acquisition preserves project bytes and executes no build or debugger
+
+    Examples:
+      | compiler | sdk      | status    | refusal                                 |
+      | implicit | selected | refused   | java.context.compilerOptionsIncomplete  |
+      | implicit | omitted  | refused   | java.context.sdkRequired                |
+      | pinned   | selected | available | none                                    |
+
   @REQ-JAVA-PROJECT-CONTEXT-001#project-context-resolves-provider-qualified-source-set-kind-or-refuses-ambiguity
   Scenario Outline: Project context resolves provider-qualified source-set kind or refuses ambiguity
     Given a multi-module Maven reactor with Failsafe profile "<profile>" and ownership "<ownership>"

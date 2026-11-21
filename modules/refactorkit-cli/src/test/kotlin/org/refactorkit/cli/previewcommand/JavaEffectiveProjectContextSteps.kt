@@ -388,6 +388,68 @@ class JavaEffectiveProjectContextSteps {
         assertTrue(refusal.message.contains("explicit qualified JDK platform"), refusal.message)
     }
 
+    @Given("a Maven source-target 17 project with {string} compiler binding")
+    fun mavenCompilerAuthorityFixture(binding: String) {
+        val compiler = when (binding) {
+            "implicit" -> ""
+            "pinned" -> """
+                <build><plugins><plugin>
+                  <artifactId>maven-compiler-plugin</artifactId><version>3.13.0</version>
+                </plugin></plugins></build>
+            """.trimIndent()
+            else -> error("Unexpected compiler binding: $binding")
+        }
+        val owned = Files.createTempDirectory("rk-maven-compiler-authority-")
+        container = owned
+        root = owned.resolve("workspace")
+        val repository = Files.createDirectory(owned.resolve("repository"))
+        write(root.resolve("pom.xml"), """
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture.context</groupId>
+              <artifactId>compiler-authority</artifactId><version>1</version>
+              <properties><maven.compiler.source>17</maven.compiler.source>
+                <maven.compiler.target>17</maven.compiler.target></properties>
+              $compiler
+            </project>
+        """.trimIndent() + "\n")
+        write(root.resolve("src/main/java/example/CompilerAuthority.java"),
+            "package example; class CompilerAuthority {}\n")
+        session = DaemonSession()
+        previousHash = requireNotNull(session).dispatch("project.open", buildJsonObject {
+            put("root", root.toString())
+            put("mavenRepository", repository.toString())
+        }).jsonObject.getValue("snapshotHash").jsonPrimitive.content
+        baseline = contents(owned)
+    }
+
+    @When("public Maven project context is requested with {string} SDK selection")
+    fun requestMavenCompilerAuthority(sdk: String) {
+        response = requireNotNull(session).dispatch("project.context", buildJsonObject {
+            put("expectedSnapshotHash", previousHash)
+            when (sdk) {
+                "selected" -> put("sdkHome", System.getProperty("java.home"))
+                "omitted" -> Unit
+                else -> error("Unexpected SDK selection: $sdk")
+            }
+        }).jsonObject
+    }
+
+    @Then("the Maven compiler authority response is {string} with refusal {string}")
+    fun mavenCompilerAuthorityResponse(status: String, expectedRefusal: String) {
+        assertEquals("java-project-context-v2", response.getValue("schemaVersion").jsonPrimitive.content)
+        assertEquals(status, response.getValue("status").jsonPrimitive.content, response.toString())
+        if (expectedRefusal == "none") {
+            assertEquals(JsonNull, response.getValue("refusal"))
+            assertNotNull(response["analysis"] as? JsonObject)
+            return
+        }
+        val refusal = response.getValue("refusal").jsonObject
+        assertEquals(expectedRefusal, refusal.getValue("code").jsonPrimitive.content, response.toString())
+        if (expectedRefusal == "java.context.compilerOptionsIncomplete") {
+            assertTrue(refusal.getValue("message").jsonPrimitive.content.contains("effective compiler options"))
+        }
+        assertTrue(response.getValue("modules").jsonArray.isEmpty())
+    }
+
     @Given("an explicitly synchronized Maven and Gradle fixture where both providers expose module {string} source set {string} for {string}")
     fun providerQualifiedCollisionFixture(moduleId: String, sourceSetId: String, sourceRelativePath: String) {
         assertEquals(":app", moduleId)
