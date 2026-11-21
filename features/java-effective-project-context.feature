@@ -506,6 +506,11 @@ Feature: Expose snapshot-bound Java effective project context to integration con
     Then the analysis refuses with "java.platform.explicitJdkRequired" before host platform fallback
     And context acquisition preserves project bytes and executes no build or debugger
 
+  @REQ-JAVA-PROJECT-CONTEXT-001#maven-runtime-selection-is-discoverable-before-project-open
+  Scenario: Maven runtime selection is discoverable before project open
+    When the IDE requests capabilities from a fresh daemon session
+    Then project open advertises Maven runtime selection as a read-only capability
+
   @REQ-JAVA-PROJECT-CONTEXT-001#maven-source-target-context-distinguishes-compiler-facts-from-sdk-selection
   Scenario Outline: Maven source-target context distinguishes compiler facts from SDK selection
     Given a Maven source-target 17 project with "<compiler>" compiler binding

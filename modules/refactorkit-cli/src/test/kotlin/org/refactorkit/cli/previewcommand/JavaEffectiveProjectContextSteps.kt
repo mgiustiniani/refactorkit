@@ -7,6 +7,7 @@ import io.cucumber.java.en.Then
 import io.cucumber.java.en.When
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -389,6 +390,24 @@ class JavaEffectiveProjectContextSteps {
         assertEquals(expectedCode, refusal.code)
         assertEquals("java.platform.explicitJdkRequired", refusal.code)
         assertTrue(refusal.message.contains("explicit qualified JDK platform"), refusal.message)
+    }
+
+    @When("the IDE requests capabilities from a fresh daemon session")
+    fun discoverMavenRuntimeSelection() {
+        DaemonSession().use { daemon ->
+            response = daemon.dispatch("server.capabilities", null).jsonObject
+        }
+    }
+
+    @Then("project open advertises Maven runtime selection as a read-only capability")
+    fun mavenRuntimeSelectionAdvertised() {
+        val projectOpen = response.getValue("methods").jsonArray.map { it.jsonObject }
+            .single { it.getValue("name").jsonPrimitive.content == "project.open" }
+        assertEquals(JsonPrimitive("beta-contract"), projectOpen["stability"])
+        assertEquals(JsonPrimitive(false), projectOpen["requiresProject"])
+        assertEquals(JsonPrimitive(false), projectOpen["writesWorkspace"])
+        val features = assertNotNull(projectOpen["features"], "project.open must advertise Maven runtime selection")
+        assertEquals(JsonPrimitive(true), features.jsonObject["mavenRuntime"])
     }
 
     @Given("a Maven source-target 17 project with {string} compiler binding")

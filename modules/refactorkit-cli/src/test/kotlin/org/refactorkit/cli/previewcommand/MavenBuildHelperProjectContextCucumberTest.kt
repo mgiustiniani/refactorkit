@@ -39,6 +39,7 @@ import org.junit.platform.suite.api.Suite
         "@REQ-JAVA-PROJECT-CONTEXT-001#maven-java-27-v7-source-owner-is-available-with-unqualified-semantic-analysis or " +
         "@REQ-JAVA-PROJECT-CONTEXT-001#maven-java-27-v7-symbol-analysis-uses-the-qualified-jdt-platform-or-refuses or " +
         "@REQ-JAVA-PROJECT-CONTEXT-001#maven-release-27-is-refused-without-lower-source-fallback or " +
+        "@REQ-JAVA-PROJECT-CONTEXT-001#maven-runtime-selection-is-discoverable-before-project-open or " +
         "@REQ-JAVA-PROJECT-CONTEXT-001#maven-source-target-context-distinguishes-compiler-facts-from-sdk-selection or " +
         "@REQ-JAVA-PROJECT-CONTEXT-001#maven-test-jvm-settings-are-source-set-bound-and-fail-closed or " +
         "@REQ-JAVA-PROJECT-CONTEXT-001#maven-test-jvm-plugin-defaults-require-a-versioned-origin-and-a-clean-argline-layer or " +

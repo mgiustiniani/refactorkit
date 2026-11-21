@@ -262,8 +262,10 @@ of the beta baseline for documented methods.
 | `java.importExternalClass` | `experimental` | External Java import preview; requires an opened project snapshot. |
 | Any unlisted method | `internal` | Treat as unsupported. |
 
-`project.open` accepts optional `mavenRuntime` metadata for a caller-selected
-standard Maven 3.9 runtime. Supply the absolute `coreJar` path to its
+`server.capabilities` advertises support before project open through the
+`project.open` method's `features.mavenRuntime` flag. Clients send the optional
+`mavenRuntime` selector when this flag is `true` and omit it otherwise.
+For a caller-selected standard Maven 3.9 runtime, supply the absolute `coreJar` path to its
 `lib/maven-core-<version>.jar` and the independently expected lowercase
 `sha256` digest. The provider can then recover the default JAR lifecycle
 compiler binding for Maven Compiler Plugin 3.13.0 or 3.15.0 when a project
