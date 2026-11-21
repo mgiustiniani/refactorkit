@@ -56,8 +56,11 @@ internal object JavaManagedJpqlRename {
         val before = inspect(snapshot, targetPath, owner, from) ?: return null
         if (before.queryLocations != preview.references.map { it.location }.toSet()) return null
         val after = inspect(WorkspaceEditSimulator.apply(snapshot, edit), targetPath, owner, to) ?: return null
-        if (before.column != after.column || before.queryLocations.size != after.queryLocations.size) return null
-        val scope = "java-spring-data-jpql-maven-field-closure-v1"
+        if (before.column != after.column || before.namedQueryName != after.namedQueryName ||
+            before.queryLocations.size != after.queryLocations.size
+        ) return null
+        val scope = if (before.namedQueryName == null) "java-spring-data-jpql-maven-field-closure-v1"
+        else "java-jpql-maven-field-closure-v1"
         return ManagedJpqlRename(
             PlanReferenceAnalysis(
                 preview.schemaVersion, scope, PlanReferenceCompleteness.COMPLETE, true, "managed-stable",
@@ -78,8 +81,18 @@ internal object JavaManagedJpqlRename {
         )
     }
 
-    private data class EntityMapping(val column: String, val idType: String)
-    private data class PropertyClosure(val column: String, val queryLocations: Set<SourceLocation>)
+    private data class EntityMapping(
+        val column: String,
+        val idType: String,
+        val namedQueryName: String?,
+        val namedQueryLocations: List<SourceLocation>,
+    )
+
+    private data class PropertyClosure(
+        val column: String,
+        val namedQueryName: String?,
+        val queryLocations: Set<SourceLocation>,
+    )
 
     private fun hasClosedMavenInputs(snapshot: ProjectSnapshot): Boolean {
         val pom = snapshot.auxiliaryFiles.singleOrNull() ?: return false
@@ -137,10 +150,11 @@ internal object JavaManagedJpqlRename {
 
     private fun inspect(snapshot: ProjectSnapshot, targetPath: Path, owner: String, property: String): PropertyClosure? {
         val parser = JdtJavaSemanticAnalyzer()
+        val source = snapshot.files.singleOrNull { it.path == targetPath } ?: return null
         val entity = parser.withBoundCompilationUnit(snapshot, targetPath) { unit, _ ->
-            topLevel(unit)?.let { inspectEntity(it, owner, property) }
+            topLevel(unit)?.let { inspectEntity(it, source, owner, property) }
         }.resolved() ?: return null
-        val locations = linkedSetOf<SourceLocation>()
+        val locations = entity.namedQueryLocations.toCollection(linkedSetOf())
         for (file in snapshot.files) {
             if (file.path == targetPath) continue
             val references = parser.withBoundCompilationUnit(snapshot, file.path) { unit, _ ->
@@ -148,7 +162,7 @@ internal object JavaManagedJpqlRename {
             }.resolved() ?: return null
             locations.addAll(references)
         }
-        return PropertyClosure(entity.column, locations)
+        return PropertyClosure(entity.column, entity.namedQueryName, locations)
     }
 
     private fun <T> JdtBoundCompilationUnitResolution<T>.resolved(): T? =
@@ -163,7 +177,7 @@ internal object JavaManagedJpqlRename {
         return type
     }
 
-    private fun inspectEntity(type: TypeDeclaration, owner: String, property: String): EntityMapping? {
+    private fun inspectEntity(type: TypeDeclaration, file: SourceFile, owner: String, property: String): EntityMapping? {
         if (type.isInterface || Modifier.isAbstract(type.modifiers) || Modifier.isFinal(type.modifiers) ||
             type.resolveBinding()?.qualifiedName != owner || type.superclassType != null || type.superInterfaceTypes().isNotEmpty()
         ) return null
@@ -176,12 +190,19 @@ internal object JavaManagedJpqlRename {
         ) return null
 
         val mapping = annotations(type.modifiers()) ?: return null
-        if (mapping.keys !in setOf(setOf(ENTITY, ACCESS), setOf(ENTITY, ACCESS, TABLE)) ||
+        val mappingKeys = mapping.keys - JavaStaticJpqlPropertyQuery.JAKARTA_NAMED_QUERY
+        if (mappingKeys !in setOf(setOf(ENTITY, ACCESS), setOf(ENTITY, ACCESS, TABLE)) ||
             mapping[ENTITY]?.declaredMemberValuePairs?.isNotEmpty() != false
         ) return null
         val access = mapping[ACCESS]?.onlyValue("value") as? IVariableBinding ?: return null
         if (!access.isEnumConstant || access.name != "FIELD" || !external(access.declaringClass, "jakarta.persistence.AccessType")) return null
         if (TABLE in mapping && (mapping[TABLE]?.onlyValue("name") as? String).isNullOrBlank()) return null
+        val namedQuery = mapping[JavaStaticJpqlPropertyQuery.JAKARTA_NAMED_QUERY]
+        val namedQueryName = namedQuery?.declaredMemberValuePairs?.singleOrNull { it.name == "name" }?.value as? String
+        val namedQueryLocations = if (namedQuery == null) emptyList() else {
+            if (namedQueryName == null) return null
+            JavaStaticJpqlPropertyQuery.locationsForNamedQuery(type, file, property) ?: return null
+        }
 
         var idType: String? = null
         var column: String? = null
@@ -203,7 +224,7 @@ internal object JavaManagedJpqlRename {
                 idType = binding.type.qualifiedName
             }
         }
-        return EntityMapping(column ?: return null, idType ?: return null)
+        return EntityMapping(column ?: return null, idType ?: return null, namedQueryName, namedQueryLocations)
     }
 
     private fun inspectRepository(

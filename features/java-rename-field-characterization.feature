@@ -218,6 +218,21 @@ Ability: Rename an owner-bound Java field with exact JDT binding evidence, fall 
     Then the JPQL field rename has "<result>" with exact query edits and no unowned writes
 
     Examples:
-      | inputs                       | result      |
-      | static Jakarta named query   | review-only |
-      | computed Jakarta named query | review-only |
+      | inputs                       | result       |
+      | static Jakarta named query   | preview-only |
+      | computed Jakarta named query | review-only  |
+
+  @REQ-JAVA-RENAME-FIELD-CHAR-001 @functional-requirement @REQ-JAVA-RENAME-FIELD-CHAR-001#closed-static-named-jpql-field-rename-applies-and-rolls-back
+  Scenario Outline: Closed static named JPQL field rename applies and rolls back
+    Given a Maven JPQL field-rename fixture with "<inputs>"
+    When the IDE previews the saved entity field rename with Maven SDK authority
+    Then the JPQL field rename has "<result>" with exact query edits and no unowned writes
+
+    Examples:
+      | inputs                                          | result              |
+      | static Jakarta named query                      | managed             |
+      | static Jakarta named query with empty outputs   | managed             |
+      | static Jakarta named query with compiled output | review-only         |
+      | static Jakarta named query with opaque resource | review-only         |
+      | computed Jakarta named query                    | review-only         |
+      | static Jakarta named query with empty outputs   | late-output-refusal |

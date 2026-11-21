@@ -31,6 +31,7 @@ class KotlinJvmManagedJpqlRenameSteps {
     private lateinit var original: Map<Path, String>
     private lateinit var input: String
     private val daemon = DaemonSession()
+    private val staticNamedQuery get() = input.startsWith("static Jakarta named query")
 
     @Given("a Maven JPQL field-rename fixture with {string}")
     fun workspaceWithMapping(input: String) {
@@ -38,9 +39,9 @@ class KotlinJvmManagedJpqlRenameSteps {
         parent = Files.createTempDirectory("rk-managed-jpql-").toRealPath()
         workspace = Files.createDirectory(parent.resolve("workspace"))
         val mapping = if (input == "implicit column mapping") "" else "@Column(name = \"display_name\")"
-        val namedQuery = when (input) {
-            "static Jakarta named query" -> STATIC_NAMED_QUERY
-            "computed Jakarta named query" -> COMPUTED_NAMED_QUERY
+        val namedQuery = when {
+            staticNamedQuery -> STATIC_NAMED_QUERY
+            input == "computed Jakarta named query" -> COMPUTED_NAMED_QUERY
             else -> null
         }
         val entity = """
@@ -83,7 +84,7 @@ class KotlinJvmManagedJpqlRenameSteps {
         """.trimMargin() + "\n"
         write(workspace.resolve(ENTITY), entity)
         write(workspace.resolve(REPOSITORY), caller)
-        if (input == "external query resource") {
+        if (input == "external query resource" || input == "static Jakarta named query with opaque resource") {
             write(workspace.resolve("src/main/resources/META-INF/jpa-named-queries.properties"),
                 "User.external=select u.amount from User u\n")
         }
@@ -113,11 +114,11 @@ class KotlinJvmManagedJpqlRenameSteps {
         """.trimIndent())
         val compiled = compileSources(apiJar, repositoryJar, "before")
         when (input) {
-            "empty Maven outputs" -> {
+            "empty Maven outputs", "static Jakarta named query with empty outputs" -> {
                 Files.createDirectories(workspace.resolve(MAIN_OUTPUT))
                 Files.createDirectories(workspace.resolve(TEST_OUTPUT))
             }
-            "compiled Maven output" -> {
+            "compiled Maven output", "static Jakarta named query with compiled output" -> {
                 val classFile = Path.of("example/jpql/User.class")
                 val target = workspace.resolve(MAIN_OUTPUT).resolve(classFile)
                 Files.createDirectories(target.parent)
@@ -134,10 +135,20 @@ class KotlinJvmManagedJpqlRenameSteps {
         snapshot = call("project.open", buildJsonObject { put("root", workspace.toString()) })
             .getValue("snapshotHash").jsonPrimitive.content
         val sdk = System.getProperty("java.home")
-        val readout = call("project.context", buildJsonObject {
+        val sdkSelection = buildJsonObject {
             put("expectedSnapshotHash", snapshot)
             put("sdkHome", sdk)
-        })
+        }
+        val aggregate = call("project.context", sdkSelection)
+        val readout = if (staticNamedQuery || input == "computed Jakarta named query") {
+            val module = aggregate.getValue("modules").jsonArray.single().jsonObject
+            call("project.context.v7", buildJsonObject {
+                sdkSelection.forEach { (key, value) -> put(key, value) }
+                put("providerId", "maven-effective-v1")
+                put("moduleId", module.getValue("id"))
+                put("sourceSetId", "main")
+            })
+        } else aggregate
         assertEquals("available", readout.getValue("status").jsonPrimitive.content, readout.toString())
         context = buildJsonObject {
             put("sdkHome", sdk)
@@ -174,7 +185,7 @@ class KotlinJvmManagedJpqlRenameSteps {
         val references = analysis.getValue("references").jsonArray.map { it.jsonObject }
         val namedReferences = references.filter { it["provenance"]?.jsonPrimitive?.content == "jpa.named-query-jpql" }
         val diff = plan.getValue("renderedDiff").jsonPrimitive.content.lines()
-        if (input == "static Jakarta named query") {
+        if (staticNamedQuery) {
             assertEquals(2, namedReferences.size, "Both references in @NamedQuery.query should be visible")
             val line = original.getValue(ENTITY).lines().indexOf(STATIC_NAMED_QUERY)
             val first = STATIC_NAMED_QUERY.indexOf("u.amount") + 2
@@ -191,12 +202,16 @@ class KotlinJvmManagedJpqlRenameSteps {
                     put("end", buildJsonObject { put("line", line); put("character", character + "amount".length) })
                 }, location.getValue("range"))
             }
-            assertTrue("+${STATIC_NAMED_QUERY.replace("u.amount", "u.displayName")}" in diff)
+            assertTrue("+$RENAMED_NAMED_QUERY" in diff)
         } else {
             assertTrue(namedReferences.isEmpty())
             if (input == "computed Jakarta named query") assertTrue(diff.none { it.startsWith("+@NamedQuery") })
         }
         assertEquals(2 + namedReferences.size, references.size)
+        if (result == "preview-only") {
+            assertTrue(!Files.exists(workspace.resolve(".refactorkit/transactions")))
+            return
+        }
         val apply = buildJsonObject {
             put("planId", plan.getValue("planId"))
             put("expectedSnapshotHash", snapshot)
@@ -240,7 +255,8 @@ class KotlinJvmManagedJpqlRenameSteps {
         val applied = call("refactor.apply", apply)
         assertEquals("applied", applied.getValue("status").jsonPrimitive.content, applied.toString())
         assertEquals(original + mapOf(
-            ENTITY to original.getValue(ENTITY).replace("String amount;", "String displayName;"),
+            ENTITY to original.getValue(ENTITY).replace("String amount;", "String displayName;")
+                .replace(STATIC_NAMED_QUERY, RENAMED_NAMED_QUERY),
             REPOSITORY to original.getValue(REPOSITORY).replace("u.amount", "u.displayName"),
         ), projectImage())
         compileSources(parent.resolve("persistence.jar"), parent.resolve("spring-data.jar"), "after")
@@ -252,7 +268,7 @@ class KotlinJvmManagedJpqlRenameSteps {
         assertEquals("rolledBack", rollback.getValue("status").jsonPrimitive.content)
         assertEquals(snapshot, rollback.getValue("snapshotHash").jsonPrimitive.content)
         assertEquals(original, projectImage())
-        if (input == "empty Maven outputs") {
+        if (input == "empty Maven outputs" || input == "static Jakarta named query with empty outputs") {
             listOf(MAIN_OUTPUT, TEST_OUTPUT).forEach { output ->
                 Files.newDirectoryStream(workspace.resolve(output)).use { assertTrue(!it.iterator().hasNext()) }
             }
@@ -323,6 +339,8 @@ class KotlinJvmManagedJpqlRenameSteps {
     private companion object {
         const val STATIC_NAMED_QUERY =
             """@NamedQuery(name = "User.readNamed", query = "select u.amount from User u where u.amount is not null")"""
+        const val RENAMED_NAMED_QUERY =
+            """@NamedQuery(name = "User.readNamed", query = "select u.displayName from User u where u.displayName is not null")"""
         const val COMPUTED_NAMED_QUERY =
             """@NamedQuery(name = "User.readNamed", query = "select u." + "amount from User u where u.amount is not null")"""
         val ENTITY: Path = Path.of("src/main/java/example/jpql/User.java")

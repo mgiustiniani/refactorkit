@@ -11669,8 +11669,7 @@ One escape-free scalar selection can include an `is null` or `is not null`
 predicate on the same property. Each property token in the `query` member has
 an exact `java.annotation-string` location with `jpa.named-query-jpql`
 provenance. The query name is unchanged. Computed values, containers and other
-unresolved queries add no inferred location. The named-query preview remains
-incomplete and refuses managed Apply.
+unresolved queries add no inferred location and prevent managed Apply.
 
 The managed path under `REQ-JAVA-RENAME-FIELD-CHAR-001` covers a single
 provider-owned Maven module with explicit compiler and processor settings,
@@ -11683,6 +11682,12 @@ checks the unchanged column name and requires exact workspace membership at
 Apply. Opaque resources, implicit target-column mappings, derived methods
 and computed query values keep the captured references in review-only mode.
 The verifier reads the selected Maven model without running build plugins.
+
+A single direct Jakarta `@NamedQuery` on that entity can participate in the
+same managed rename. The staged proof includes its property ranges alongside
+the Spring Data query ranges and verifies that the named-query identifier and
+physical column are preserved. Apply and rollback use the same operation
+lease as the Spring Data-only case.
 
 The standard Maven output directories `target/classes` and
 `target/test-classes` may be absent or empty. The provider checks the declared
