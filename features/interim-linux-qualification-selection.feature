@@ -51,6 +51,21 @@ Feature: Select only the admitted host during interim qualification
       | push    | main   | cross-platform-runtime |
       | release | v0.8.0 | build-runtime          |
 
+  @REQ-C-INTERIM-HOST-001
+  @REQ-C-INTERIM-HOST-001#native-maven-move-class-receipts-bind-the-selected-feature-bytes
+  Scenario Outline: Native Maven move-class receipts bind the selected feature bytes
+    Given an interim qualification request uses "push" and "main"
+    When the repository workflow selects its qualification jobs
+    Then the native Maven move-class receipt passes the "<control>" control
+    And interim selection preserves native verification and historical release guards
+
+    Examples:
+      | control                |
+      | exact tagged feature    |
+      | historical feature      |
+      | wrong matrix identity   |
+      | changed scenario bytes  |
+
   @REQ-C-INTERIM-HOST-001#ci-and-the-v0-8-release-test-c-against-the-attested-clang-toolchain
   @ci-exact-clang-toolchain
   Scenario: CI and the v0.8 release test C against the attested Clang toolchain

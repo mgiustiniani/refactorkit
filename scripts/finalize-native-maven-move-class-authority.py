@@ -20,7 +20,10 @@ ALLOWED_PLATFORMS = {
     "macos-aarch64",
 }
 EXPECTED_BASELINE_SHA256 = "dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6"
-EXPECTED_FEATURE_SHA256 = "3c42982c9d792c78162b680ff195fab361551f7392574f43c7247812bcb50696"
+REVIEWED_FEATURE_SHA256 = {
+    "3c42982c9d792c78162b680ff195fab361551f7392574f43c7247812bcb50696",
+    "f131a64529a6d2d1e46eab5b8bbc09c36e44040e026969eac4580850cd8a81b7",  # 0.8 exact scenario selectors
+}
 EXPECTED_TOTALS = {"requirements": 13, "scenarios": 31, "steps": 436, "hooks": 62}
 
 
@@ -101,7 +104,8 @@ def finalize(repository: Path, build_root: Path, platform: str, expected_revisio
     feature = repository / "features/java-maven-move-class-apply-authority.feature"
     if sha256(baseline) != EXPECTED_BASELINE_SHA256:
         raise ValueError("REQ-013 baseline identity drifted")
-    if sha256(feature) != EXPECTED_FEATURE_SHA256:
+    feature_identity = sha256(feature)
+    if feature_identity not in REVIEWED_FEATURE_SHA256:
         raise ValueError("move-class feature identity drifted")
 
     report_root = build_root / "reports/cucumber"
@@ -116,7 +120,7 @@ def finalize(repository: Path, build_root: Path, platform: str, expected_revisio
     matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
     if matrix.get("status") != "PASSED" or matrix.get("totals") != EXPECTED_TOTALS:
         raise ValueError("complete packaged matrix is missing, failed, or has wrong totals")
-    if matrix.get("featureSha256") != EXPECTED_FEATURE_SHA256:
+    if matrix.get("featureSha256") != feature_identity:
         raise ValueError("complete packaged matrix used the wrong feature identity")
     if matrix.get("req013BaselineSha256") != EXPECTED_BASELINE_SHA256:
         raise ValueError("complete packaged matrix used the wrong REQ-013 baseline")
@@ -152,7 +156,7 @@ def finalize(repository: Path, build_root: Path, platform: str, expected_revisio
             "embeddedVersionOutput": (java_version.stdout + java_version.stderr).strip().splitlines(),
         },
         "baselineSha256": EXPECTED_BASELINE_SHA256,
-        "featureSha256": EXPECTED_FEATURE_SHA256,
+        "featureSha256": feature_identity,
         "publicCli": {
             "cucumber": public_cucumber,
             "junit": public_junit,

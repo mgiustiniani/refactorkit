@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 import os
 import shutil
 import subprocess
@@ -13,6 +14,16 @@ import unittest
 from pathlib import Path
 
 
+FEATURE = Path("features/java-maven-move-class-apply-authority.feature")
+HISTORICAL_FEATURE_SHA256 = "3c42982c9d792c78162b680ff195fab361551f7392574f43c7247812bcb50696"
+TAGGED_FEATURE_SHA256 = "f131a64529a6d2d1e46eab5b8bbc09c36e44040e026969eac4580850cd8a81b7"
+STORY_SELECTORS = (
+    b"@REQ-JAVA-MAVEN-MOVE-AUTH-001#binding-clean-move-is-committed-once-and-rolled-back-byte-for-byte",
+    b"@REQ-JAVA-MAVEN-MOVE-AUTH-002#only-binding-proven-java-observers-are-updated",
+    b"@REQ-JAVA-MAVEN-MOVE-AUTH-003#safely-enumerable-preview-defects-produce-immutable-non-managed-guidance",
+)
+
+
 class NativeMavenMoveClassFinalizerTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -20,6 +31,8 @@ class NativeMavenMoveClassFinalizerTest(unittest.TestCase):
         self.repository = self.root / "repository"
         self.build = self.repository / "modules/refactorkit-cli/build"
         self.output = self.build / "qualification/native-receipt.json"
+        self.feature = self.repository / FEATURE
+        self.matrix = self.build / "qualification/packaged-maven-move-class-authority/matrix-manifest.json"
         source = Path(__file__).resolve().parents[1]
         for relative in (
             "docs/requirements/req-java-maven-move-auth-013-baseline.md",
@@ -29,7 +42,7 @@ class NativeMavenMoveClassFinalizerTest(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((source / relative).read_bytes())
         self._write_public_receipts()
-        self._write_matrix(source)
+        self._write_matrix()
         self._write_runtime()
         self._git("init", "-q")
         self._git("add", ".")
@@ -70,13 +83,12 @@ class NativeMavenMoveClassFinalizerTest(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def _write_matrix(self, source: Path) -> None:
-        matrix = self.build / "qualification/packaged-maven-move-class-authority/matrix-manifest.json"
-        matrix.parent.mkdir(parents=True)
-        matrix.write_text(json.dumps({
+    def _write_matrix(self, feature_identity: str | None = None) -> None:
+        self.matrix.parent.mkdir(parents=True, exist_ok=True)
+        self.matrix.write_text(json.dumps({
             "status": "PASSED",
             "totals": {"requirements": 13, "scenarios": 31, "steps": 436, "hooks": 62},
-            "featureSha256": "3c42982c9d792c78162b680ff195fab361551f7392574f43c7247812bcb50696",
+            "featureSha256": feature_identity or sha256(self.feature.read_bytes()).hexdigest(),
             "req013BaselineSha256": "dfab8db43830383aa771b0ecead5394e1525a7f16732dfc1f19acac8261878d6",
         }), encoding="utf-8")
 
@@ -113,10 +125,47 @@ class NativeMavenMoveClassFinalizerTest(unittest.TestCase):
 
     def test_complete_revision_bound_receipt_passes(self) -> None:
         result, receipt = self._run()
-        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(0, result.returncode, receipt.get("failure", result.stderr))
         self.assertEqual("PASSED", receipt["status"])
         self.assertEqual(self.revision, receipt["sourceRevision"])
+        self.assertEqual(sha256(self.feature.read_bytes()).hexdigest(), receipt["featureSha256"])
         self.assertEqual(31, receipt["completeMatrix"]["totals"]["scenarios"])
+
+    def _record_feature_or_matrix_change(self) -> None:
+        self._git("add", FEATURE.as_posix(), self.matrix.relative_to(self.repository).as_posix())
+        self._git("-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+                  "commit", "--allow-empty", "-qm", "alternate feature evidence")
+        self.revision = self._git("rev-parse", "HEAD").stdout.strip()
+
+    def test_historical_feature_receipt_passes(self) -> None:
+        original = self.feature.read_bytes()
+        for selector in STORY_SELECTORS:
+            original = original.replace(b" " + selector + b" ", b" ")
+        self.assertEqual(HISTORICAL_FEATURE_SHA256, sha256(original).hexdigest())
+        self.feature.write_bytes(original)
+        self._write_matrix()
+        self._record_feature_or_matrix_change()
+        self.test_complete_revision_bound_receipt_passes()
+
+    def test_matrix_cannot_select_the_other_reviewed_feature(self) -> None:
+        identity = sha256(self.feature.read_bytes()).hexdigest()
+        other = HISTORICAL_FEATURE_SHA256 if identity == TAGGED_FEATURE_SHA256 else TAGGED_FEATURE_SHA256
+        self._write_matrix(other)
+        self._record_feature_or_matrix_change()
+        result, receipt = self._run()
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual("FAILED", receipt["status"])
+        self.assertIn("wrong feature identity", receipt["failure"])
+
+    def test_changed_feature_bytes_refuse_even_with_matching_matrix(self) -> None:
+        with self.feature.open("ab") as feature:
+            feature.write(b"\n# changed fixture bytes\n")
+        self._write_matrix()
+        self._record_feature_or_matrix_change()
+        result, receipt = self._run()
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual("FAILED", receipt["status"])
+        self.assertIn("move-class feature identity drifted", receipt["failure"])
 
     def test_revision_mismatch_writes_failed_receipt(self) -> None:
         result, receipt = self._run("0" * 40)

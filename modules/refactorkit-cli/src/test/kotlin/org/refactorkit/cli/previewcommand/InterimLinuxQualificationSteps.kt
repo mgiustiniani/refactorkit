@@ -227,6 +227,33 @@ class InterimLinuxQualificationSteps {
         }
     }
 
+    @Then("the native Maven move-class receipt passes the {string} control")
+    fun mavenMoveClassReceipt(control: String) {
+        val test = when (control) {
+            "exact tagged feature" -> "test_complete_revision_bound_receipt_passes"
+            "historical feature" -> "test_historical_feature_receipt_passes"
+            "wrong matrix identity" -> "test_matrix_cannot_select_the_other_reviewed_feature"
+            "changed scenario bytes" -> "test_changed_feature_bytes_refuse_even_with_matching_matrix"
+            else -> error("Unexpected Maven move-class receipt control $control")
+        }
+        val job = mapping(mapping(ci["jobs"])["maven-move-class-native"])
+        val policy = steps(job).single { it["name"] == "Test native receipt finalizer" }
+        val script = "scripts/test-finalize-native-maven-move-class-authority.py"
+        assertTrue(policy["run"].toString().contains("\"$script\""))
+        val log = Files.createTempFile("rk-maven-native-receipt-", ".log")
+        try {
+            val process = ProcessBuilder("python3", "-B", script, "NativeMavenMoveClassFinalizerTest.$test")
+                .directory(repository.toFile()).redirectErrorStream(true).redirectOutput(log.toFile()).start()
+            if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                error("Maven move-class receipt fixture timed out")
+            }
+            assertEquals(0, process.exitValue(), Files.readString(log))
+        } finally {
+            Files.deleteIfExists(log)
+        }
+    }
+
     @When("the C qualification toolchain is prepared for workflow test tasks")
     fun prepareCQualificationToolchain() {
         val ciSteps = steps(mapping(mapping(ci["jobs"])["build"]))
