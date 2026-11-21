@@ -70,12 +70,17 @@ data class TransactionJournalRecord(
     val authorityAttributes: Map<String, String> = emptyMap(),
     val rollbackEmptyDirectories: Set<Path> = emptySet(),
     val rollbackEmptyDirectoryIdentities: Map<Path, String> = emptyMap(),
+    val retiredSourceDirectory: RetiredSourceDirectoryImage? = null,
 ) {
     companion object {
         const val CURRENT_SCHEMA_VERSION = 8
         const val AUTHORITY_SCHEMA_VERSION = 9
+        const val RETIRED_SOURCE_SCHEMA_VERSION = 10
     }
 }
+
+@Serializable
+data class RetiredSourceDirectoryImage(val path: String, val directoryIdentity: String)
 
 @Serializable
 @OptIn(ExperimentalSerializationApi::class)
@@ -102,6 +107,8 @@ internal data class TransactionJournalDto(
     val rollbackEmptyDirectories: List<String> = emptyList(),
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val rollbackEmptyDirectoryIdentities: Map<String, String> = emptyMap(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val retiredSourceDirectory: RetiredSourceDirectoryImage? = null,
 )
 
 @Serializable
@@ -129,8 +136,11 @@ private val canonicalJournalJson = Json { prettyPrint = false; encodeDefaults = 
 
 internal fun TransactionJournalRecord.toJson(): String {
     val unsigned = TransactionJournalDto(
-        schemaVersion = if (authorityAttributes.isEmpty()) TransactionJournalRecord.CURRENT_SCHEMA_VERSION
-            else TransactionJournalRecord.AUTHORITY_SCHEMA_VERSION,
+        schemaVersion = when {
+            retiredSourceDirectory != null -> TransactionJournalRecord.RETIRED_SOURCE_SCHEMA_VERSION
+            authorityAttributes.isNotEmpty() -> TransactionJournalRecord.AUTHORITY_SCHEMA_VERSION
+            else -> TransactionJournalRecord.CURRENT_SCHEMA_VERSION
+        },
         implementationVersion = implementationVersion,
         apiVersion = apiVersion,
         transaction = transaction.toDto(),
@@ -149,6 +159,7 @@ internal fun TransactionJournalRecord.toJson(): String {
         rollbackEmptyDirectories = rollbackEmptyDirectories.map(ProtocolPath::serialize).sorted(),
         rollbackEmptyDirectoryIdentities = rollbackEmptyDirectoryIdentities.entries
             .associate { (path, identity) -> ProtocolPath.serialize(path) to identity }.toSortedMap(),
+        retiredSourceDirectory = retiredSourceDirectory,
         checksum = null,
     )
     return journalJson.encodeToString(unsigned.copy(checksum = checksum(unsigned)))
@@ -156,7 +167,7 @@ internal fun TransactionJournalRecord.toJson(): String {
 
 internal fun journalRecordFromJson(json: String): TransactionJournalRecord {
     val dto = journalJson.decodeFromString<TransactionJournalDto>(json)
-    require(dto.schemaVersion in 1..TransactionJournalRecord.AUTHORITY_SCHEMA_VERSION) {
+    require(dto.schemaVersion in 1..TransactionJournalRecord.RETIRED_SOURCE_SCHEMA_VERSION) {
         "Unsupported transaction journal schema: ${dto.schemaVersion}"
     }
     if (dto.schemaVersion >= 2) {
@@ -199,6 +210,7 @@ internal fun journalRecordFromJson(json: String): TransactionJournalRecord {
         authorityAttributes = java.util.Collections.unmodifiableMap(LinkedHashMap(dto.authorityAttributes)),
         rollbackEmptyDirectories = dto.rollbackEmptyDirectories.mapTo(linkedSetOf(), Paths::get),
         rollbackEmptyDirectoryIdentities = dto.rollbackEmptyDirectoryIdentities.mapKeys { (path, _) -> Paths.get(path) },
+        retiredSourceDirectory = dto.retiredSourceDirectory,
     )
 }
 

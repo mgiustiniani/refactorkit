@@ -2388,7 +2388,7 @@ Broader operation/surface/support qualification is not inferred.
 
 == Bounded Maven Module Rename
 
-Status: implementation-informed and `@implemented-and-validated`. `features/java-maven-module-rename.feature` contains one ordinary functional scenario, no `Background`, no `Scenario Outline`, one repository-unique stable requirement ID, 50 declared scenario steps, and one 50-step executable case. Independent OpenJDK 21.0.11 execution passed 1/1 scenario and 50/50 steps (log/JSON SHA-256 `b882c9393147fb52e6106329e15b521b3ab19274eb4866a25f8737e5b27fc479`/`d2ff5c1c87b533ad4c760274b6fd191b68f0113e71cf2b268af7831c48e65958`).
+The original direct-child acceptance scenario carries `@implemented-and-validated`. Its recorded library run selects one 50-step case in `features/java-maven-module-rename.feature`. Independent OpenJDK 21.0.11 execution passed 1/1 scenario and 50/50 steps (log/JSON SHA-256 `b882c9393147fb52e6106329e15b521b3ab19274eb4866a25f8737e5b27fc479`/`d2ff5c1c87b533ad4c760274b6fd191b68f0113e71cf2b268af7831c48e65958`).
 
 [cols="2,3,2,2,2",options="header"]
 |===
@@ -2411,6 +2411,39 @@ reactor succeeded. This is an observed interaction between generated build
 outputs and rollback eligibility; no cause has been attributed. The bounded
 direct-library Story does not execute Maven between Apply
 and rollback, so lifecycle interleaving remains outside its qualified boundary.
+
+[[maven-nested-module-directory-move-2026-11-21]]
+=== Move a Maven module directory while preserving its GAV
+
+`REQ-JAVA-MAVEN-MODULE-RENAME-001#move-a-module-into-a-nested-directory-preserving-gav`
+covers a non-aggregating JAR named by a literal module entry in the sole root
+aggregator. Supply workspace-relative `oldModuleDir` and `newModuleDir` in
+`refactor.preview` with operation `renameMavenModule`. The nested move preserves
+GAV when `newArtifactId` is omitted or equals the existing artifact ID. The
+existing Maven model exposes the moved module at `components/library` with ID
+`components:library`.
+
+The planner updates the root module entry and rebases the moved POM's local
+parent reference when the destination depth changes. It handles both an explicit
+root-POM `relativePath` and the default Maven parent lookup. Preview is read-only.
+Apply revalidates the staged reactor and diagnostics. For a nested move, it
+removes the old module path from the workspace after the tracked file moves.
+The journal retains the original directory tree so normal rollback restores
+its hierarchy along with the saved files. Rollback reports a conflict when the
+old path has been recreated. A POM edit at the source path precedes the file
+move in the ordered work plan. The edited POM is installed at the destination.
+Linked or blocked destination ancestors, overlapping module roots and
+unqualified parent references refuse.
+
+The daemon advertises `features.nestedModuleDirectoryMove=true` on the
+`java.renameMavenModule` entry from `server.capabilities`. Consumers can use
+this feature flag to gate nested destinations. Six library Story cases passed.
+The packaged daemon passed preview, Apply, Maven 3.9.16 offline verification
+with JDK 21 and exact rollback for both parent forms and the existing flat
+artifact-rename control. Consumer POM bytes remained exact in the nested moves.
+The Linux x86-64 archive SHA-256 is `4ab5b846afb8672498b9c938ca23487d4050a0a4f736c36fc69a51a12c62e8da`.
+Evidence is retained under
+`.refactorkit/runs/v080-ide-maven-module-nested-directory-20261121-r001/`.
 
 == Managed Maven Module-rename Surface Backlog
 

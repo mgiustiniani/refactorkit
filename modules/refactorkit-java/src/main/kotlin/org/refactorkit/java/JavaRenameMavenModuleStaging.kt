@@ -6,6 +6,7 @@ import org.refactorkit.core.ClasspathEvidence
 import org.refactorkit.core.ClasspathEvidenceKind
 import org.refactorkit.core.Diagnostic
 import org.refactorkit.core.DiagnosticDetails
+import org.refactorkit.core.FileEdit
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.WorkspaceEdit
 import org.refactorkit.java.JavaRenameMavenModuleContract.DESCRIPTOR_UNAVAILABLE
@@ -59,8 +60,7 @@ internal object JavaRenameMavenModuleStaging {
             refuse(DIAGNOSTICS_REGRESSION, "Copied baseline JDT diagnostics differ from the caller's immutable model")
         }
 
-        // File edits leave empty directories at the old root. Maven still declares
-        // the rebased output paths, but only existing outputs enter its classpaths.
+        // Maven declares the rebased output paths but only existing outputs enter its classpaths.
         val oldModuleRoot = workspace.resolve(oldModule)
         val retainedEmptyOutputs = availableMavenModel(rebuiltBaseline).modules
             .single { it.id == moduleId(pathString(oldModule)) }.sourceSets
@@ -71,6 +71,9 @@ internal object JavaRenameMavenModuleStaging {
             .map { pathString(workspace.relativize(it)) }
 
         JavaRenameMavenModuleWorkspace.applyInOrder(workspace, edit)
+        val newModule = edit.edits.filterIsInstance<FileEdit.Rename>()
+            .single { it.path == oldModule.resolve("pom.xml") }.newPath.parent
+        if (retiresSourceDirectory(oldModule, newModule)) removeEmptySourceTree(oldModuleRoot)
         val stagedManifest = JavaRenameMavenModuleWorkspace.manifestHash(workspace)
         val rebuiltStaged = JavaRenameMavenModuleWorkspace.scanOffline(workspace, emptyRepository)
         val rebuiltStagedModel = rebuiltStaged.buildModels.singleOrNull()
@@ -147,7 +150,16 @@ internal object JavaRenameMavenModuleStaging {
             "Candidate semantic snapshot identity is outside the Maven module-rename authority lease"
         }
         return JavaRenameMavenModuleWorkspace.withWorkspaceCopy(candidate.workspace.root) { workspace, emptyRepository ->
+            val retiredSource = authority.oldModule.takeIf {
+                expectation.destinationPresent && retiresSourceDirectory(it, authority.newModule)
+            }
+            if (retiredSource != null && Files.exists(workspace.resolve(authority.newModule), LinkOption.NOFOLLOW_LINKS)) {
+                require(Files.notExists(workspace.resolve(retiredSource), LinkOption.NOFOLLOW_LINKS)) {
+                    "The committed Maven source directory still exists"
+                }
+            }
             JavaRenameMavenModuleWorkspace.reconcileTrackedSnapshot(workspace, emptyRepository, candidate)
+            if (retiredSource != null) removeEmptySourceTree(workspace.resolve(retiredSource))
             require(JavaRenameMavenModuleWorkspace.manifestHash(workspace) == expectation.manifestHash) {
                 "Full staged workspace identity differs from the Maven module-rename authority lease"
             }
@@ -155,7 +167,7 @@ internal object JavaRenameMavenModuleStaging {
             require(Files.exists(destination, LinkOption.NOFOLLOW_LINKS) == expectation.destinationPresent) {
                 "Destination no-follow fact differs from the Maven module-rename authority lease"
             }
-            if (expectation.destinationPresent) {
+            if (expectation.destinationPresent && retiredSource == null) {
                 require(Files.isDirectory(workspace.resolve(authority.oldModule), LinkOption.NOFOLLOW_LINKS)) {
                     "The staged source hierarchy was not preserved as empty directories"
                 }
@@ -202,7 +214,21 @@ internal object JavaRenameMavenModuleStaging {
                     authoritative.trackedFiles.none { it.path.normalize().startsWith(target) }
                 ) conventionalOutputs + setOf(target) else emptySet()
             } else emptySet()
-            AuthoritativeDiagnosticsEvaluation(authoritative, diagnostics, optionalRollbackDirectories)
+            AuthoritativeDiagnosticsEvaluation(authoritative, diagnostics, optionalRollbackDirectories, retiredSource)
+        }
+    }
+
+    private fun retiresSourceDirectory(oldModule: Path, newModule: Path): Boolean =
+        oldModule.nameCount > 1 || newModule.nameCount > 1
+
+    private fun removeEmptySourceTree(root: Path) {
+        if (Files.notExists(root, LinkOption.NOFOLLOW_LINKS)) return
+        Files.walk(root).use { paths ->
+            val tree = paths.toList()
+            require(tree.all { Files.isDirectory(it, LinkOption.NOFOLLOW_LINKS) }) {
+                "The staged source hierarchy contains content outside the Maven directory move"
+            }
+            tree.asReversed().forEach(Files::delete)
         }
     }
 

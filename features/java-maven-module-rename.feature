@@ -172,9 +172,9 @@ Business Need: Rename one proven direct-child Maven module without widening writ
 
     Examples:
       | parent path   | layout                  | destination                | outcome                       |
-      | explicit      | absent parent directory | components/library         | applies then rolls back       |
-      | Maven default | absent parent directory | components/library         | applies then rolls back       |
-      | explicit      | existing directory      | components/library         | applies then rolls back       |
+      | explicit      | absent parent directory | components/library         | applies, retires the source, and rolls back       |
+      | Maven default | absent parent directory | components/library         | applies, retires the source, and rolls back       |
+      | explicit      | existing directory      | components/library         | applies, retires the source, and rolls back       |
       | explicit      | linked ancestor         | components/library         | refuses an unsafe destination |
       | explicit      | blocking file           | components/library         | refuses an unsafe destination |
       | explicit      | absent parent directory | library/components/library | refuses an unsafe destination |

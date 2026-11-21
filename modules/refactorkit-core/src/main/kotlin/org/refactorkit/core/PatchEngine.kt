@@ -295,6 +295,7 @@ class PatchEngine(
                     requireNotNull(gateValidation.stagedWorkspaceEdit),
                     stagedEvaluation.snapshot.hash,
                     stagedEvaluation.rollbackEmptyDirectories,
+                    stagedEvaluation.sourceDirectoryToRetire,
                 )
                 if (applied is ApplyResult.Applied) {
                     validatePostApplyAuthoritativeDiagnostics(
@@ -542,6 +543,14 @@ class PatchEngine(
         }
         val stagingConflicts = validateReservedStagingPathsAbsent(record)
         if (stagingConflicts.isNotEmpty()) return@withWorkspaceLock ApplyResult.Refused(stagingConflicts)
+        try {
+            RetiredSourceDirectories.requireReadyForRollback(normalizedRoot, record)
+        } catch (error: Exception) {
+            return@withWorkspaceLock ApplyResult.Refused(listOf(Diagnostic(
+                "Rollback source directory cannot be restored: ${error.message}",
+                Diagnostic.Severity.ERROR, code = "rollback.conflict",
+            )))
+        }
         val cleanup = if (mode == RollbackMode.NORMAL) {
             try {
                 RollbackEmptyDirectories.validateScope(record.rollbackEmptyDirectories, record.createdDirectories, record.postImages)
@@ -630,6 +639,7 @@ class PatchEngine(
             val currentImages = record.preImages.map { image -> FileImage(image.path, readImage(image.path)) }
             val permissions = record.preImages.associate { it.path to it.posixPermissions }
             transactionLog.update(rolling)
+            RetiredSourceDirectories.restore(normalizedRoot, rolling, ::forceWorkspaceDirectory)
             RollbackEmptyDirectories.remove(normalizedRoot, cleanup)
             commitPostImages(rolling, currentImages, record.preImages, permissions)
             removeCreatedDirectories(record.createdDirectories)
@@ -1395,7 +1405,8 @@ class PatchEngine(
             )
             val semanticMismatch = boundaryDiagnostics.isNotEmpty() ||
                 committedEvaluation.snapshot.hash != expected.snapshot.hash ||
-                committedEvaluation.rollbackEmptyDirectories != expected.rollbackEmptyDirectories
+                committedEvaluation.rollbackEmptyDirectories != expected.rollbackEmptyDirectories ||
+                committedEvaluation.sourceDirectoryToRetire != expected.sourceDirectoryToRetire
             val diagnosticDifferences = diagnosticMultisetDifferenceCount(
                 expected.diagnostics,
                 committedEvaluation.diagnostics,
@@ -1638,10 +1649,12 @@ class PatchEngine(
         stagedWorkspaceEdit: StagedWorkspaceEdit? = null,
         exactPostSnapshotHash: String? = null,
         rollbackEmptyDirectories: Set<Path> = emptySet(),
+        sourceDirectoryToRetire: Path? = null,
     ): ApplyResult {
         val record = try {
             prepareJournalRecord(
                 plan, snapshot, approval, stagedWorkspaceEdit, exactPostSnapshotHash, rollbackEmptyDirectories,
+                sourceDirectoryToRetire,
             ).also { candidate ->
                 require(validateReservedStagingPathsAbsent(candidate).isEmpty()) { "Reserved staging path already exists" }
             }
@@ -1677,6 +1690,7 @@ class PatchEngine(
                 record.postImages,
                 record.postImages.associate { it.path to it.posixPermissions },
             )
+            RetiredSourceDirectories.retire(normalizedRoot, record, ::forceWorkspaceDirectory)
             transactionLog.update(record.copy(state = JournalState.APPLIED))
             ApplyResult.Applied(record.transaction)
         } catch (error: Exception) {
@@ -1741,6 +1755,7 @@ class PatchEngine(
         stagedWorkspaceEdit: StagedWorkspaceEdit? = null,
         exactPostSnapshotHash: String? = null,
         rollbackEmptyDirectories: Set<Path> = emptySet(),
+        sourceDirectoryToRetire: Path? = null,
     ): TransactionJournalRecord {
         val staged = stagedWorkspaceEdit ?: stageWorkspaceEdit(plan.workspaceEdit)
         val preImages = staged.preImages.map { image ->
@@ -1773,8 +1788,13 @@ class PatchEngine(
         )
         val createdDirectories = missingParentDirectories(postImages)
         RollbackEmptyDirectories.validateScope(rollbackEmptyDirectories, createdDirectories, postImages)
-        require(rollbackEmptyDirectories.isEmpty() || "rollbackAuthorityProvider" !in plan.authorityLease?.attributes.orEmpty()) {
+        require((rollbackEmptyDirectories.isEmpty() && sourceDirectoryToRetire == null) ||
+            "rollbackAuthorityProvider" !in plan.authorityLease?.attributes.orEmpty()
+        ) {
             "Protected rollback requires its original post-apply directory layout"
+        }
+        val retiredSource = sourceDirectoryToRetire?.let {
+            RetiredSourceDirectories.capture(normalizedRoot, it, transaction.id, preImages, postImages, plan.workspaceEdit)
         }
         return TransactionJournalRecord(
             transaction = transaction,
@@ -1790,6 +1810,7 @@ class PatchEngine(
                 "rollbackAuthorityProvider" in it || it["retainInTransactionJournal"] == "true"
             }.orEmpty(),
             rollbackEmptyDirectories = rollbackEmptyDirectories,
+            retiredSourceDirectory = retiredSource,
             history = listOf(JournalEvent(
                 JournalState.PREPARED,
                 Instant.now(),
@@ -2293,12 +2314,21 @@ class PatchEngine(
             return false
         }
         return try {
+            RetiredSourceDirectories.restore(normalizedRoot, record, ::forceWorkspaceDirectory, recovering = true)
+            val restoredCurrent = if (record.retiredSourceDirectory == null) current else current.keys.associateWith { path ->
+                require(validateNoSymbolicLinkTraversal(path) == null) { "Recovery path traverses a symbolic link: $path" }
+                readImage(path).also { content ->
+                    require(content == pre[path]?.content || content == post[path]?.content) {
+                        "Recovered source directory conflicts with journal images: $path"
+                    }
+                }
+            }
             RollbackEmptyDirectories.remove(normalizedRoot, cleanup)
             ownedStages.keys.forEach { path ->
                 if (Files.deleteIfExists(path)) forceWorkspaceDirectory(requireNotNull(path.parent))
             }
             if (ownsStagingReservation(record)) transactionLog.deleteStagingOwnership(record)
-            if (current.any { (path, content) -> content != pre[path]?.content }) {
+            if (restoredCurrent.any { (path, content) -> content != pre[path]?.content }) {
                 commitPostImages(
                     record,
                     post.values.toList(),

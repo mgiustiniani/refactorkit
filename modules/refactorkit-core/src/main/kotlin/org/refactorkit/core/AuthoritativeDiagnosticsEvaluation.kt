@@ -13,11 +13,19 @@ import java.util.LinkedHashSet
  * provider's caller-owned collections from changing either the authoritative
  * value or the semantic state from which its fresh snapshot hash was computed.
  */
-class AuthoritativeDiagnosticsEvaluation @JvmOverloads constructor(
+class AuthoritativeDiagnosticsEvaluation(
     snapshot: ProjectSnapshot,
     diagnostics: List<Diagnostic>,
-    rollbackEmptyDirectories: Set<Path> = emptySet(),
+    rollbackEmptyDirectories: Set<Path>,
+    val sourceDirectoryToRetire: Path?,
 ) {
+    @JvmOverloads
+    constructor(
+        snapshot: ProjectSnapshot,
+        diagnostics: List<Diagnostic>,
+        rollbackEmptyDirectories: Set<Path> = emptySet(),
+    ) : this(snapshot, diagnostics, rollbackEmptyDirectories, null)
+
     val snapshot: ProjectSnapshot = deeplyDetachedSnapshot(snapshot)
     val rollbackEmptyDirectories: Set<Path> = immutableSet(rollbackEmptyDirectories)
     private val diagnosticValues: List<Diagnostic> = immutableList(
@@ -30,14 +38,16 @@ class AuthoritativeDiagnosticsEvaluation @JvmOverloads constructor(
         other is AuthoritativeDiagnosticsEvaluation &&
             snapshot == other.snapshot &&
             diagnosticValues == other.diagnosticValues &&
-            rollbackEmptyDirectories == other.rollbackEmptyDirectories
+            rollbackEmptyDirectories == other.rollbackEmptyDirectories &&
+            sourceDirectoryToRetire == other.sourceDirectoryToRetire
 
     override fun hashCode(): Int =
-        31 * (31 * snapshot.hashCode() + diagnosticValues.hashCode()) + rollbackEmptyDirectories.hashCode()
+        31 * (31 * (31 * snapshot.hashCode() + diagnosticValues.hashCode()) + rollbackEmptyDirectories.hashCode()) +
+            sourceDirectoryToRetire.hashCode()
 
     override fun toString(): String =
         "AuthoritativeDiagnosticsEvaluation(snapshot=$snapshot, diagnostics=$diagnosticValues, " +
-            "rollbackEmptyDirectories=$rollbackEmptyDirectories)"
+            "rollbackEmptyDirectories=$rollbackEmptyDirectories, sourceDirectoryToRetire=$sourceDirectoryToRetire)"
 }
 
 private fun deeplyDetachedSnapshot(source: ProjectSnapshot): ProjectSnapshot = ProjectSnapshot(

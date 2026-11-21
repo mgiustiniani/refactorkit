@@ -20,6 +20,7 @@ import java.nio.file.Path
 import java.util.Comparator
 import kotlin.io.path.invariantSeparatorsPathString
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -64,6 +65,7 @@ class JavaMavenNestedModuleMoveSteps {
             "blocking file" -> write("components", "blocking file")
             else -> error("Unknown destination layout $layout")
         }
+        Files.createDirectories(reactor.resolve("library/empty/original"))
         baseline = capture()
         original = scan()
         assertEquals(BuildModelStatus.AVAILABLE, original.buildModels.single().status)
@@ -84,13 +86,14 @@ class JavaMavenNestedModuleMoveSteps {
             assertEquals("mavenOwnership.destinationUnrecognized", plan.refusalCode)
             assertTrue(plan.workspaceEdit.edits.isEmpty())
         } else {
-            assertEquals("applies then rolls back", outcome)
+            assertEquals("applies, retires the source, and rolls back", outcome)
             assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
             val engine = PatchEngine(reactor)
-            val applied = assertIs<ApplyResult.Applied>(engine.apply(
+            val result = engine.apply(
                 plan, original, ApplyAuthorization.explicit("nested-maven-fixture", "acceptance"),
                 planner.diagnosticsGate(plan),
-            ))
+            )
+            val applied = assertIs<ApplyResult.Applied>(result, result.toString())
             val expected = baseline.filterValues { it != "DIRECTORY" }.toMutableMap()
             expected["pom.xml"] = expected.getValue("pom.xml").replace("<module>library</module>", "<module>$target</module>")
             val originalPom = expected.remove("library/pom.xml")!!
@@ -107,7 +110,18 @@ class JavaMavenNestedModuleMoveSteps {
             assertEquals(reactor.resolve(target), library.root)
             val coordinates = listOf("groupId", "artifactId", "version").map { library.attributes["java.maven.$it"] }
             assertEquals(listOf("fixture", "library", "1"), coordinates)
+            val oldSourceStillVisible = Files.exists(reactor.resolve("library"), NOFOLLOW_LINKS)
+            if (!oldSourceStillVisible && target.startsWith("components/") && "components/keep.txt" in baseline) {
+                write("library/foreign.txt", "unrelated caller content")
+                val conflicted = capture()
+                val rejected = assertIs<ApplyResult.Refused>(engine.rollback(applied.transaction, RollbackMode.NORMAL))
+                assertTrue(rejected.diagnostics.any { it.code == "rollback.conflict" })
+                assertEquals(conflicted, capture())
+                Files.delete(reactor.resolve("library/foreign.txt"))
+                Files.delete(reactor.resolve("library"))
+            }
             assertIs<ApplyResult.Applied>(engine.rollback(applied.transaction, RollbackMode.NORMAL))
+            assertFalse(oldSourceStillVisible, "Applied nested module move must retire the original source directory")
             assertEquals(baseline, capture())
             assertEquals(original.hash, scan().hash)
         }
