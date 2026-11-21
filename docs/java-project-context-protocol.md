@@ -1346,6 +1346,36 @@ as separate flows. Do not refresh S1 arbitrarily or use ordinary/force rollback 
 cross this boundary. Rollback after a changed classpath requires a distinct authority
 contract and is currently unsupported.
 
+### Extract Delegate
+
+Discover `extractDelegate` in `server.capabilities.javaContextRefactoring.operationCapabilities`
+with capability `stable`, mutation authority `managed-stable` and evidence `compiler`.
+Use `refactor.preview` with the same SDK and snapshot as the saved JDT `METHOD`
+selection. Pass the returned `javaSelection` and these arguments.
+
+```json
+{
+  "typeName": "Calculation",
+  "members": ["OFFSET", "adjust", "compute"]
+}
+```
+
+`members` contains two to four distinct names in one top-level class, including
+the selected method. The planner moves at least two private static methods with
+primitive signatures, each returning a single bound primitive expression.
+It can also move one private static final `int` with a literal initializer.
+The members must form a connected group with a bound use in another ordinary
+method body of the owner. The new type is private, static and final. Staged JDT
+checks the moved signatures and reference counts before normal managed Apply
+and SDK-protected rollback. The preview flags potential changes to private
+reflection, stack traces and class-file identity.
+
+Malformed argument types return `-32602`. Unsupported groups, unresolved or
+unselected dependencies, unsupported initialization, and name collisions
+return `-32001` with a `java.extractDelegate.*` refusal code before issuing a plan.
+The [ARC42 requirement](arc42/appendix-requirements.adoc#java-extract-delegate)
+records the supported shape and qualification evidence.
+
 ## Closed dirty Java mutation preview
 
 Experimental `refactor.editor.preview` accepts `languageId: "java"`, `operation`,

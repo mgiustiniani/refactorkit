@@ -3180,15 +3180,17 @@
     "javaContextRefactoring": {
       "schemaVersion": 1,
       "operations": [
+        "batchCleanup",
         "changeSignature.addParameter",
         "changeSignature.changeParameterType",
         "changeSignature.removeParameter",
         "changeSignature.renameParameter",
         "changeSignature.reorderParameters",
+        "changeType",
         "changeVisibility",
-        "batchCleanup",
         "encapsulateField",
         "extractConstant",
+        "extractDelegate",
         "extractField",
         "extractInterface",
         "extractMethod",
@@ -3197,9 +3199,12 @@
         "extractVariable",
         "formatFile",
         "inlineConstant",
+        "inlineMethod",
         "inlineVariable",
+        "introduceParameterObject",
         "makeStatic",
         "moveClass",
+        "moveMember",
         "movePackage",
         "moveSourceRoot",
         "organizeImports",
@@ -3247,6 +3252,12 @@
           "evidence": "compiler"
         },
         {
+          "operation": "changeType",
+          "stability": "stable",
+          "mutationAuthority": "managed-stable",
+          "evidence": "compiler"
+        },
+        {
           "operation": "changeVisibility",
           "stability": "stable",
           "mutationAuthority": "managed-stable",
@@ -3260,6 +3271,12 @@
         },
         {
           "operation": "extractConstant",
+          "stability": "stable",
+          "mutationAuthority": "managed-stable",
+          "evidence": "compiler"
+        },
+        {
+          "operation": "extractDelegate",
           "stability": "stable",
           "mutationAuthority": "managed-stable",
           "evidence": "compiler"
@@ -3313,7 +3330,19 @@
           "evidence": "compiler"
         },
         {
+          "operation": "inlineMethod",
+          "stability": "stable",
+          "mutationAuthority": "managed-stable",
+          "evidence": "compiler"
+        },
+        {
           "operation": "inlineVariable",
+          "stability": "stable",
+          "mutationAuthority": "managed-stable",
+          "evidence": "compiler"
+        },
+        {
+          "operation": "introduceParameterObject",
           "stability": "stable",
           "mutationAuthority": "managed-stable",
           "evidence": "compiler"
@@ -3337,6 +3366,12 @@
             "sourceSetKind": "main",
             "requiresUniqueNonGeneratedRoot": true
           }
+        },
+        {
+          "operation": "moveMember",
+          "stability": "stable",
+          "mutationAuthority": "managed-stable",
+          "evidence": "compiler"
         },
         {
           "operation": "movePackage",
@@ -3437,6 +3472,15 @@
         "qualification": "operation-specific; metadata does not qualify unexecuted editor, MCP, LSP or consumer workflows"
       },
       "operationRequestContracts": [
+        {
+          "operation": "extractDelegate",
+          "requiredArguments": ["typeName", "members"],
+          "requiredPreviewIdentity": ["expectedSnapshotHash", "javaContext", "javaSelection"],
+          "selectionKind": "METHOD",
+          "selectionAuthority": "saved-snapshot",
+          "memberShape": "two to four distinct names including the selected method; at least two private static primitive methods and at most one private static final int literal constant in the same top-level class",
+          "contract": "docs/java-project-context-protocol.md#extract-delegate"
+        },
         {
           "operation": "batchCleanup",
           "requiredArguments": [

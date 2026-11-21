@@ -9655,6 +9655,33 @@ The saved method selector, review, Apply, offline Maven test for
 `answer(2, 7) == 27`, and exact rollback all pass. Both runs exit with zero
 surviving processes.
 
+[[java-extract-delegate]]
+=== Extract Delegate from a saved Java method — 2026-11-21
+
+`REQ-JAVA-EXTRACT-DELEGATE-001` advances the P1 delegate transformations.
+`extractDelegate` advertises compiler evidence and `managed-stable` authority.
+The operation moves a closed group of private static methods and an optional
+literal private constant into a private static final nested type. The original
+class retains its public signatures and forwards bound calls and reads from
+ordinary method bodies. JDT rebinds the moved declarations and verifies their
+signatures and internal and external reference counts before managed preview.
+Selection and snapshot authority stay attached through Apply and rollback.
+
+The link:../../features/java-extract-delegate.feature[acceptance Story] covers
+the managed lifecycle and five typed refusals. An unselected dependency, an
+unresolved call, a computed initializer, a reference from an owner initializer
+and a conflicting type name each refuse before writing. The
+link:../java-project-context-protocol.md#extract-delegate[Java context protocol]
+defines the required saved `METHOD` selector and the exact argument shape.
+The preview identifies the private declaring-class, stack trace and class-file
+identity changes. The Linux x86-64 archive `6ff3284b` passed six cases and
+18 steps on the packaged daemon. The Maven replay acquired context v7 with
+Temurin 8, used Maven 3.9.16 offline on Temurin 21, and obtained the same Java 8
+result before Apply, after Apply and after byte-exact rollback. The archive,
+wire and Maven receipts are under
+`.refactorkit/runs/v080-ide-java-extract-delegate-20261121-r001/`.
+Native consuming IDE qualification is actionable.
+
 === Java extractVariable bounded operation — 2026-10-24
 
 The managed `extractVariable` cell accepts a complete JDT-bound subexpression
