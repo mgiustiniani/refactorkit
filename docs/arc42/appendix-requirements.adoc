@@ -14036,6 +14036,24 @@ client assertion to read the documented `transactionId` property. See
 The CLI and managed LSP commands are described in
 link:../c-language.md#c-component-relocation[the C adapter guide].
 
+[[c07-owned-header-formatting-2026-11-21]]
+=== C07 managed formatting with captured local headers (2026-11-21)
+
+`REQ-C-FORMAT-SOURCE-001#captured-ordered-local-headers-authorize-format-apply`
+passed five cases and fifteen steps against the compiled implementation.
+The approved plan binds the local quoted-header closure, maintains directive
+text and include order in the selected source, and compiles before and staged
+images using Clang 22.1.8. The retained lease checks captured header bytes
+under lock with the existing database and style evidence. The two C11/C17
+lifecycles restore the exact source on rollback. Computed or missing includes
+and post-preview header drift refuse without writes or a journal.
+
+The baseline reproduced three semantic failures and kept both refusal controls.
+Evidence is in `.refactorkit/runs/v080-c07-captured-header-format-20261121-r001/`.
+Package acceptance remains `actionable`. The qualified directive and command
+profile is described in
+link:../requirements/c-formatting-source.md#managed-formatting-with-captured-local-headers[the formatting requirement].
+
 [[c08-c15-include-managed-boundaries-2026-11-13]]
 === C08/C15 include-aware input integrity and database preservation (2026-11-13)
 

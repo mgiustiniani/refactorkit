@@ -71,13 +71,17 @@ internal sealed interface CHeaderFieldSourceAdmission {
 }
 /** Shared pure pre-execution guard; native acquisition delegates this rule. */
 internal object CHeaderFieldSourcePolicy {
-    fun check(sources: Map<Path, String>): CHeaderFieldSourceAdmission {
+    fun check(sources: Map<Path, String>): CHeaderFieldSourceAdmission = check(sources) { false }
+
+    fun check(sources: Map<Path, String>, additionalHeaderDirective: (String) -> Boolean): CHeaderFieldSourceAdmission {
         if (sources.size > 32 || sources.values.sumOf { it.length.toLong() } > 8_388_608L ||
             sources.values.any { it.length > 1_048_576 }) return CHeaderFieldSourceAdmission.Refused(CHeaderFieldRefusal.INPUT_LIMIT)
-        if (sources.keys.any { it != it.normalize() } || sources.values.any { text ->
+        if (sources.keys.any { it != it.normalize() } || sources.any { (path, text) ->
+            fun admitted(line: String) = qualifiedDirective(line) ||
+                (path.fileName.toString().endsWith(".h") && additionalHeaderDirective(line))
             text.any { it.code > 127 || it == '\\' } || "??" in text || "%:" in text || "_Pragma" in text ||
                 text.lineSequence().any { line -> line.trimStart().startsWith('#') &&
-                    !qualifiedDirective(line) } || unqualifiedTokens(text)
+                    !admitted(line) } || unqualifiedTokens(text, ::admitted)
         }) return CHeaderFieldSourceAdmission.Refused(CHeaderFieldRefusal.UNSUPPORTED_SOURCE)
         return CHeaderFieldSourceAdmission.Admitted
     }
@@ -87,7 +91,7 @@ internal object CHeaderFieldSourcePolicy {
     private val ISO_C_WORDS = setOf("_Alignas", "_Alignof", "_Atomic", "_Bool", "_Complex", "_Generic", "_Imaginary",
         "_Noreturn", "_Static_assert", "_Thread_local", "__func__")
 
-    private fun unqualifiedTokens(text: String): Boolean {
+    private fun unqualifiedTokens(text: String, directiveAdmitted: (String) -> Boolean): Boolean {
         // Preprocessing replaces comments with whitespace before recognizing directives.
         // Reject forms the literal include-ownership reader does not itself acquire.
         val normalized = text.replace("\r\n", "\n").replace('\r', '\n')
@@ -98,7 +102,7 @@ internal object CHeaderFieldSourcePolicy {
                 token.text[0] == '_' && (token.text[1] == '_' || token.text[1].isUpperCase()) && token.text !in ISO_C_WORDS
             if (reservedExtension) true
             else if (token.type == CTokenType.STRING && (token.text.length < 2 || token.text.last() != token.text.first())) true
-            else observedLines.add(token.line) && token.text == "#" && !qualifiedDirective(lines[token.line - 1])
+            else observedLines.add(token.line) && token.text == "#" && !directiveAdmitted(lines[token.line - 1])
         }
     }
 }

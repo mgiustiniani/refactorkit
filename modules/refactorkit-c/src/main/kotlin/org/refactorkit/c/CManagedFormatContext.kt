@@ -171,12 +171,6 @@ internal class CManagedFormatContext(
             require(regenerated.status == PatchStatus.PREVIEW && regenerated.workspaceEdit == plan.workspaceEdit) {
                 "c.safeDeletePlanChanged: semantic safe-delete evidence no longer reproduces the approved edit"
             }
-        } else {
-            require(snapshot.files.all { file ->
-                !Regex("(?m)^\\s*#").containsMatchIn(file.content)
-            }) {
-                "${codePrefix}CompilationContextUnavailable: preprocessor directives require a separately qualified captured-header context"
-            }
         }
         val staged = WorkspaceEditSimulator.apply(snapshot, plan.workspaceEdit)
         val originalAuxiliary = snapshot.auxiliaryFiles.associateBy { it.path.normalize() }
@@ -251,8 +245,15 @@ internal class CManagedFormatContext(
             isSafeDelete -> StyleCapture(null, sha256("safe-delete-no-format-style".toByteArray(Charsets.UTF_8)), null)
             else -> captureStyle(snapshot, sourceAbsolute)
         }
+        val formatHeaders = if (!isIncludeOrder && !isSafeDelete &&
+            (snapshot.files + staged.files).any { FORMAT_DIRECTIVE.containsMatchIn(it.content) }) {
+            captureFormatHeaders(snapshot, staged, root, translationUnits, source)
+        } else {
+            emptyList()
+        }
         val contexts = database.units.sortedBy { it.file.toString() }.associate { unit ->
-            unit.file to sanitize(unit.arguments, unit.file, root, clangPath)
+            val flags = sanitize(unit.arguments, unit.file, root, clangPath)
+            unit.file to if (formatHeaders.isEmpty()) flags else flags + "-nostdinc"
         }
         if (isIncludeOrder) {
             val expectedContexts = database.units.associate { unit ->
@@ -265,8 +266,9 @@ internal class CManagedFormatContext(
         val databaseHash = sha256(databaseBytes)
         val stagedHash = staged.hash
         val editHash = WorkspaceEditIdentity.sha256(plan.workspaceEdit)
+        val diagnosticsPolicy = if (formatHeaders.isEmpty()) policyId else FORMAT_HEADER_POLICY
         val evidenceHash = sha256(listOf(
-            policyId, snapshot.hash, stagedHash, editHash, databaseHash, clangIdentity.sha256,
+            diagnosticsPolicy, snapshot.hash, stagedHash, editHash, databaseHash, clangIdentity.sha256,
             runtimeIdentity.orEmpty(), source.toString(), style.identityHash, contexts.size.toString(),
             managedSymbol.orEmpty(),
         ).joinToString("|").toByteArray(Charsets.UTF_8))
@@ -275,6 +277,7 @@ internal class CManagedFormatContext(
                 "${leaseAttributePrefix}CompilationDatabase", dbRelative, databaseHash,
             ))
             style.fileEvidence?.let(::add)
+            addAll(formatHeaders)
         }
         val lease = OperationAuthorityLease(
             kind = when {
@@ -295,14 +298,58 @@ internal class CManagedFormatContext(
                 "${leaseAttributePrefix}NativeRuntimeIdentity" to runtimeIdentity.orEmpty(),
                 "${leaseAttributePrefix}StyleIdentitySha256" to style.identityHash,
                 "${leaseAttributePrefix}TranslationUnitCount" to contexts.size.toString(),
-                "${leaseAttributePrefix}DiagnosticsPolicy" to policyId,
+                "${leaseAttributePrefix}DiagnosticsPolicy" to diagnosticsPolicy,
                 *if (isSafeDelete) arrayOf("c.safeDelete.Symbol" to requireNotNull(managedSymbol)) else emptyArray(),
             ),
         )
         return Captured(
             root, snapshot.hash, stagedHash, source, databasePath, databaseHash,
-            clangPath, clangIdentity.sha256, runtimeIdentity.orEmpty(), style, contexts, lease,
+            clangPath, clangIdentity.sha256, runtimeIdentity.orEmpty(), style, formatHeaders, contexts, lease,
         )
+    }
+
+    private fun captureFormatHeaders(
+        snapshot: ProjectSnapshot,
+        staged: ProjectSnapshot,
+        root: Path,
+        translationUnits: Set<Path>,
+        formattedFile: Path,
+    ): List<OperationAuthorityFileEvidence> {
+        val oldFiles = snapshot.files.associate { it.path.normalize() to it.content }
+        val newFiles = staged.files.associate { it.path.normalize() to it.content }
+        val roots = translationUnits.associate { root.relativize(it) to emptyList<Path>() }
+        fun read(files: Map<Path, String>): List<CQuotedIncludeObservation> {
+            val graph = CQuotedIncludeClosure.analyze(files, roots, emptyMap(), roots, FORMAT_HEADER_DIRECTIVE::matches)
+            require(graph is CQuotedIncludeReadout.Found) {
+                "c.formatCompilationContextUnavailable: the local quoted header graph is not fully captured"
+            }
+            return graph.facts.before.map { it.copy(line = 0, start = 0, end = 0) }
+        }
+        fun directives(text: String) = text.lineSequence().filter { it.trimStart().startsWith('#') }
+            .map(String::trim).toList()
+        val includes = read(oldFiles)
+        require(includes.isNotEmpty() && includes == read(newFiles) &&
+            directives(oldFiles.getValue(formattedFile)) == directives(newFiles.getValue(formattedFile))) {
+            "c.formatCompilationContextUnavailable: the captured include order or directive text changed"
+        }
+        return includes.map { it.target }.distinct().sortedBy(Path::toString).map { header ->
+            require(header.fileName.toString().endsWith(".h") &&
+                classifyCFileOwnership(root, root.resolve(header), emptyList()) == CFileOwnership.PRIVATE) {
+                "c.formatCompilationContextUnavailable: formatting requires captured source-owned headers"
+            }
+            OperationAuthorityFileEvidence(
+                "c.formatHeader", header, sha256(oldFiles.getValue(header).toByteArray(Charsets.UTF_8)),
+            )
+        }
+    }
+
+    private fun formatHeaderIsCurrent(root: Path, evidence: OperationAuthorityFileEvidence): Boolean {
+        var path = root
+        for (component in evidence.path) {
+            path = path.resolve(component)
+            if (Files.isSymbolicLink(path)) return false
+        }
+        return readBounded(path, MAX_FORMAT_HEADER_BYTES)?.let(::sha256) == evidence.expectedContentSha256
     }
 
     private fun sanitize(arguments: List<String>, source: Path, root: Path, clang: Path): List<String> {
@@ -403,6 +450,7 @@ internal class CManagedFormatContext(
         private val clangHash: String,
         private val runtimeIdentity: String,
         private val style: StyleCapture,
+        private val formatHeaders: List<OperationAuthorityFileEvidence>,
         val contexts: Map<Path, List<String>>,
         val lease: OperationAuthorityLease,
     ) {
@@ -425,6 +473,9 @@ internal class CManagedFormatContext(
                 available.diagnostics
             }
             verifyInputs(candidate)
+            require(formatHeaders.isEmpty() || evaluated.none { it.severity == Diagnostic.Severity.ERROR }) {
+                "c.formatCompilationContextUnavailable: the captured local-header context has compiler errors"
+            }
             return evaluated
         }
 
@@ -441,6 +492,9 @@ internal class CManagedFormatContext(
                 ClangToolchainRuntimeCapture().checkCurrent(toolchain) == ClangToolchainRuntimeCurrency.Current &&
                 hashFile(clangPath) == clangHash) {
                 "${codePrefix}CompilerChanged: retained compiler/runtime identity changed after preview"
+            }
+            require(formatHeaders.all { formatHeaderIsCurrent(root, it) }) {
+                "c.formatHeaderChanged: captured header bytes changed after preview"
             }
             if (!isIncludeOrder && !isSafeDelete) {
                 val observedStyle = captureStyle(candidate, root.resolve(source))
@@ -498,6 +552,13 @@ internal class CManagedFormatContext(
         private const val INCLUDE_ORDER_LEASE_KIND = "c.include-order-managed-v1"
         private const val SAFE_DELETE_LEASE_KIND = "c.safe-delete-managed-v1"
         private const val FORMAT_POLICY = "root-compdb-c11-c17-literal-flags-no-preprocessor-v1"
+        private const val FORMAT_HEADER_POLICY = "root-compdb-c11-c17-owned-quoted-format-headers-v1"
+        private const val MAX_FORMAT_HEADER_BYTES = 1024 * 1024
+        private val FORMAT_DIRECTIVE = Regex("""(?m)^\s*#""")
+        // The header bytes are retained unchanged. The compiler proves the captured order under each TU.
+        private val FORMAT_HEADER_DIRECTIVE = Regex(
+            """\s*#\s*(?:define\s+[A-Z_][A-Z_0-9]*(?:[ \t]+[0-9]{1,10})?|ifndef\s+[A-Z_][A-Z_0-9]*|endif|error\s+[A-Za-z0-9 ._-]{1,120})\s*""",
+        )
         private const val INCLUDE_ORDER_POLICY = "root-compdb-c11-c17-distinct-numeric-defines-v3"
         private const val MAX_MANAGED_TUS = 8
         private val INCLUDE_ORDER_STANDARDS = setOf("c11", "c17")

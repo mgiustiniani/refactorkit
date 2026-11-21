@@ -26,11 +26,20 @@ internal sealed interface CQuotedIncludeReadout {
 }
 internal object CQuotedIncludeClosure {
     fun analyze(sources: Map<Path, String>, roots: Map<Path, List<Path>>, moves: Map<Path, Path> = emptyMap(),
-        afterRoots: Map<Path, List<Path>> = roots): CQuotedIncludeReadout = try {
+        afterRoots: Map<Path, List<Path>> = roots): CQuotedIncludeReadout =
+        analyze(sources, roots, moves, afterRoots) { false }
+
+    fun analyze(
+        sources: Map<Path, String>,
+        roots: Map<Path, List<Path>>,
+        moves: Map<Path, Path>,
+        afterRoots: Map<Path, List<Path>>,
+        additionalHeaderDirective: (String) -> Boolean,
+    ): CQuotedIncludeReadout = try {
         fun valid(path: Path) = !path.isAbsolute && path == path.normalize() && !path.startsWith("..")
         if (roots.isEmpty() || roots.size > 16 || afterRoots.size > 16 ||
             (roots.values + afterRoots.values).any { it.size > 64 }) reject(CQuotedIncludeRefusal.INPUT_LIMIT)
-        when (val admission = CHeaderFieldSourcePolicy.check(sources)) {
+        when (val admission = CHeaderFieldSourcePolicy.check(sources, additionalHeaderDirective)) {
             CHeaderFieldSourceAdmission.Admitted -> Unit
             is CHeaderFieldSourceAdmission.Refused -> reject(if (admission.reason == CHeaderFieldRefusal.INPUT_LIMIT)
                 CQuotedIncludeRefusal.INPUT_LIMIT else CQuotedIncludeRefusal.UNSUPPORTED_SOURCE)

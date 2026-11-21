@@ -166,8 +166,8 @@ an operation authority lease. The command database is parsed as data; it is neve
 executed. The bounded compiler policy requires every captured C translation unit
 to have one literal C11/C17 command rooted at the workspace, without output,
 include-path, target or sysroot flags. Only simple literal `-D` definitions are
-passed through, and sources with preprocessor directives refuse because included
-headers and directive-produced inputs do not yet have a complete staged model.
+passed through. This first cell covers translation units without preprocessor
+directives. The captured-header cell below has its own admission policy.
 
 For an admitted context, preview runs exact Clang syntax diagnostics over every
 captured translation unit against both the original and staged snapshots. New
@@ -186,6 +186,25 @@ semantics, other C flags or standards, filesystem replacement races, or all
 formatter range shapes. Those remain `actionable`; the bounded command policy is
 not a substitute for the complete C03/C05 compilation model or the C07/C16 release
 acceptance.
+
+## Managed formatting with captured local headers
+
+The scenario
+`REQ-C-FORMAT-SOURCE-001#captured-ordered-local-headers-authorize-format-apply`
+compiles the original and staged C11/C17 translation unit with its captured
+quoted headers and explicit root compilation command. The include targets,
+directive text and order must agree across both images. Included headers are
+source-owned and read from the captured overlay. Their exact bytes are checked
+again under the managed Apply lock. Clang runs syntax-only with standard
+include search disabled for this cell.
+
+The qualified fixtures exercise numeric object macros and an order-sensitive
+conditional in unchanged local headers. Apply changes only the selected
+translation unit, and rollback restores its bytes. A computed include or a
+missing header leaves the plan without Apply authority. A caller change to a
+captured header refuses before journal creation. All five cases passed against
+the compiled implementation. Package acceptance remains `actionable`.
+[ARC42 acceptance](../arc42/appendix-requirements.adoc#c07-owned-header-formatting-2026-11-21).
 
 ## Managed Apply refuses stale captured style
 
