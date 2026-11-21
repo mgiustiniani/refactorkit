@@ -1308,7 +1308,7 @@ class JavaLanguageAdapter(
         "changeType" -> applyChangeType(request)
         "inlineVariable" -> applyInlineVariable(request)
         "inlineConstant" -> applyInlineConstant(request)
-        "inlineMethod" -> applyInlineMethodRefusal(request)
+        "inlineMethod" -> applyInlineMethod(request)
         "pullUpMember" -> applyPullUpMember(request)
         "pushDownMember" -> applyPushDownMember(request)
         "moveMember" -> applyMoveMember(request)
@@ -1738,17 +1738,13 @@ class JavaLanguageAdapter(
         return JavaInlineConstantPlanner(this).preview(request.snapshot, JavaInlineConstantRequest(path, name))
     }
 
-    /**
-     * N-INLINE-METHOD refusal-only production behavior (J1 catalogue row, REQ-JAVA-INLINE-METHOD-REFUSAL-001).
-     * inlineMethod is absent from the Java adapter; this branch fails closed deterministically with
-     * the stable typed refusal code java.inlineMethod.unsupported, an empty WorkspaceEdit and
-     * affected-file set, no approval, no managed-write authority lease, and no lock/WAL/transaction.
-     */
-    private fun applyInlineMethodRefusal(request: RefactoringRequest): PatchPlan = refused(
-        request,
-        "java.inlineMethod.unsupported",
-        "Inline-method Java refactoring is unsupported; refused deterministically with java.inlineMethod.unsupported",
-    )
+    private fun applyInlineMethod(request: RefactoringRequest): PatchPlan {
+        val path = request.arguments["file"]?.let { runCatching { Path.of(it).normalize() }.getOrNull() }
+        val key = request.arguments["bindingKey"]?.takeIf(String::isNotBlank)
+        if (path == null || key == null) return refused(request, "java.inlineMethod.unsupported",
+            "Inline Method requires an exact saved Java method binding.")
+        return JavaInlineMethodPlanner(this).preview(request.snapshot, path, key)
+    }
 
     /**
      * N-PULL-UP refusal-only production behavior (J1 catalogue row, REQ-JAVA-HIERARCHY-PULL-UP-REFUSAL-001).

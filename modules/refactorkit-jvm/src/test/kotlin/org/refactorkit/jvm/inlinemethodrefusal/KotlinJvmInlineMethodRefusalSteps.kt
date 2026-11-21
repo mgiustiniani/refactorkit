@@ -5,10 +5,17 @@ import io.cucumber.java.Scenario
 import io.cucumber.java.en.Given
 import io.cucumber.java.en.Then
 import io.cucumber.java.en.When
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringRequest
+import org.refactorkit.daemon.DaemonSession
 import org.refactorkit.java.JavaLanguageAdapter
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.jvm.refusals.KotlinJvmRefusalScenarioContext
@@ -59,6 +66,97 @@ class KotlinJvmInlineMethodRefusalSteps(private val context: KotlinJvmRefusalSce
     private var workspaceBaseline: Map<Path, String>? = null
     private val observedRefusals = mutableListOf<ObservedRefusal>()
     private val refusalCode = "java.inlineMethod.unsupported"
+    private var daemon: DaemonSession? = null
+    private lateinit var savedPath: Path
+    private lateinit var savedSource: String
+    private lateinit var savedHash: String
+    private lateinit var javaContext: JsonObject
+    private lateinit var methodSelection: JsonObject
+
+    @Given("a saved Maven fixture with a private static Java helper returning an integer expression")
+    fun savedHelper() {
+        fixtureRoot = temporaryDirectory("rk-jvm-inline-method-managed")
+        fixtureRoot.resolve("pom.xml").writeText("""
+            <project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId>
+            <artifactId>inline-method</artifactId><version>1</version>
+            <properties><maven.compiler.release>21</maven.compiler.release></properties></project>
+        """.trimIndent())
+        savedPath = Path.of("src/main/java/pkg/InlineFixture.java")
+        savedSource = """
+            package pkg;
+            public final class InlineFixture {
+              private static final int ANSWER = 42;
+              public static int calculate() {
+                int local = 42;
+                return local + ANSWER;
+              }
+              private static int inlineValue() {
+                return 40 + 2;
+              }
+              public static int calculateFromInlineMethod() {
+                return inlineValue();
+              }
+            }
+        """.trimIndent() + "\n"
+        fixtureRoot.resolve(savedPath).apply { parent.createDirectories(); writeText(savedSource) }
+        workspaceBaseline = snapshotWorkspaceContent(fixtureRoot)
+        daemon = DaemonSession()
+        savedHash = rpc("project.open", buildJsonObject { put("root", fixtureRoot.toString()) })
+            .getValue("snapshotHash").jsonPrimitive.content
+        val sdkHome = Path.of(System.getProperty("java.home")).toRealPath().toString()
+        val context = rpc("project.context", buildJsonObject { put("sdkHome", sdkHome); put("expectedSnapshotHash", savedHash) })
+        assertEquals("available", context.getValue("status").jsonPrimitive.content)
+        javaContext = buildJsonObject { put("sdkHome", sdkHome); put("expectedContextHash", context.getValue("contextHash")) }
+    }
+
+    @When("the daemon resolves that Java helper at the saved method cursor")
+    fun selectSavedHelper() {
+        val line = savedSource.lineSequence().toList().indexOfFirst { it.contains("private static int inlineValue") }
+        val selection = rpc("intelligence.query", buildJsonObject {
+            put("requestId", "java-inline-method"); put("kind", "mutationSelection"); put("languageId", "java")
+            put("path", savedPath.toString()); put("expectedSnapshotHash", savedHash); put("javaContext", javaContext)
+            put("sourceAuthority", buildJsonObject { put("kind", "saved-snapshot") })
+            put("position", buildJsonObject { put("line", line); put("character", 23) })
+        })
+        assertEquals("ready", selection.getValue("status").jsonPrimitive.content)
+        methodSelection = selection.getValue("selection").jsonObject
+        assertEquals("pkg.InlineFixture#inlineValue()", methodSelection.getValue("symbolId").jsonPrimitive.content)
+    }
+
+    @Then("Java Inline Method is advertised and the daemon applies and rolls back the bound call rewrite")
+    fun verifyManagedHelper() {
+        val catalogue = rpc("server.capabilities", buildJsonObject {})
+        val contextCatalogue = catalogue.getValue("javaContextRefactoring").jsonObject
+        assertTrue(contextCatalogue.getValue("operations").jsonArray.any { it.jsonPrimitive.content == "inlineMethod" },
+            "Java project context omits inlineMethod")
+        val capability = contextCatalogue.getValue("operationCapabilities").jsonArray.map { it.jsonObject }
+            .single { it.getValue("operation").jsonPrimitive.content == "inlineMethod" }
+        assertEquals("managed-stable", capability.getValue("mutationAuthority").jsonPrimitive.content)
+        val plan = rpc("refactor.preview", buildJsonObject {
+            put("operation", "inlineMethod"); put("languageId", "java"); put("expectedSnapshotHash", savedHash)
+            put("javaContext", javaContext); put("javaSelection", methodSelection)
+            put("sourceAuthority", buildJsonObject { put("kind", "saved-snapshot") })
+        })
+        assertEquals("PREVIEW", plan.getValue("status").jsonPrimitive.content)
+        assertEquals("JDT_BINDING", plan.getValue("evidence").jsonPrimitive.content)
+        verifyNoWorkspaceMutation()
+        val applied = rpc("refactor.apply", buildJsonObject {
+            put("planId", plan.getValue("planId")); put("expectedSnapshotHash", savedHash); put("javaContext", javaContext)
+        })
+        assertEquals("applied", applied.getValue("status").jsonPrimitive.content)
+        val changed = savedSource.replace("  private static int inlineValue() {\n    return 40 + 2;\n  }\n", "")
+            .replace("return inlineValue();", "return (40 + 2);")
+        assertEquals(changed, Files.readString(fixtureRoot.resolve(savedPath)))
+        val rollback = rpc("patch.rollback", buildJsonObject {
+            put("transactionId", applied.getValue("transactionId")); put("expectedSnapshotHash", applied.getValue("snapshotHash"))
+            put("javaContext", javaContext)
+        })
+        assertEquals("rolledBack", rollback.getValue("status").jsonPrimitive.content)
+        assertEquals(savedHash, rollback.getValue("snapshotHash").jsonPrimitive.content)
+        assertEquals(savedSource, Files.readString(fixtureRoot.resolve(savedPath)))
+    }
+
+    private fun rpc(method: String, params: JsonObject): JsonObject = requireNotNull(daemon).dispatch(method, params).jsonObject
 
     // ---------------------------------------------------------- Scenario 1 Given
 
@@ -235,6 +333,7 @@ class KotlinJvmInlineMethodRefusalSteps(private val context: KotlinJvmRefusalSce
 
     @After
     fun cleanup(scenario: Scenario) {
+        daemon?.close()
         val reportDir = Path.of(System.getProperty("user.dir")).resolve("build/reports/cucumber")
         reportDir.createDirectories()
         val report = reportDir.resolve("java-inline-method-refusal-codes.txt")

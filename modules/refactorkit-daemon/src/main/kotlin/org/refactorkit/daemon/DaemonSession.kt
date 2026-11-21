@@ -2733,11 +2733,19 @@ class DaemonSession(
                 } else JavaExtractMethodPlanner().preview(snap, Paths.get(file), startLine, endLine, methodName)
             }
             "inlineMethod" -> {
-                if (requestedLanguage != "kotlin") missing("languageId=kotlin")
-                requireKotlinMutationAuthority(p, snap, "inline")
-                KotlinInlineMethodPlanner(kotlinAdapter).preview(
-                    snap, SymbolId(symbol ?: missing("symbol")),
-                )
+                if (requestedLanguage == "java") {
+                    val selection = javaSelection ?: throw JsonRpcException(JsonRpcErrorCodes.PLAN_REFUSED,
+                        "Inline Method requires an exact saved Java method selection",
+                        buildJsonObject { put("refusalCode", "java.inlineMethod.unsupported") })
+                    adapter.applyRefactoring(RefactoringRequest(
+                        operation = operation, symbolId = SymbolId(selection.symbolId), snapshot = snap,
+                        arguments = mapOf("file" to ProtocolPath.serialize(selection.declaration.path), "bindingKey" to selection.bindingKey),
+                    ))
+                } else {
+                    if (requestedLanguage != "kotlin") missing("languageId=kotlin")
+                    requireKotlinMutationAuthority(p, snap, "inline")
+                    KotlinInlineMethodPlanner(kotlinAdapter).preview(snap, SymbolId(symbol ?: missing("symbol")))
+                }
             }
             "changeSignature.renameParameter", "renameParameter" -> {
                 val oldName = args["oldName"] ?: args["oldParameterName"] ?: missing("arguments.oldName")

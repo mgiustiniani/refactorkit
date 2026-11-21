@@ -1,6 +1,6 @@
 # language: en
 @implemented-and-validated
-Ability: Refuse an unsupported inline-method Java refactoring request deterministically
+Ability: Inline a bound Java helper and refuse unsupported inline-method requests
   As a RefactorKit caller on a Java workspace
   I need the Java adapter to refuse an inlineMethod request with a deterministic typed
     refusal instead of silently guessing an edit
@@ -9,6 +9,8 @@ Ability: Refuse an unsupported inline-method Java refactoring request determinis
   This executable backlog covers row N-INLINE-METHOD of the approved finite J1 Java catalogue
   (REQ-JAVA-J1-CATALOGUE-APPROVED-001, baseline 8aa49c3): the Java adapter operation
   inlineMethod must return a deterministic REFUSED patch plan carrying the stable typed
+  refusal code when the request lacks authority for a supported transformation.
+  For those requests the expected code is
   refusal code java.inlineMethod.unsupported. The catalogue refusal contract is: an empty
   WorkspaceEdit and an empty affected-file set, no approval and no managed-write eligibility,
   no pending actionable plan, no lock, WAL, or transaction record, and a deterministic
@@ -57,3 +59,9 @@ Ability: Refuse an unsupported inline-method Java refactoring request determinis
     And the refusal records no WAL
     And the refusal records no transaction entry
     And the refusal mutates no file on disk
+
+  @REQ-JAVA-INLINE-METHOD-REFUSAL-001#saved-private-static-method-inlines-its-one-same-class-call
+  Scenario: Saved private static method inlines its one same-class call
+    Given a saved Maven fixture with a private static Java helper returning an integer expression
+    When the daemon resolves that Java helper at the saved method cursor
+    Then Java Inline Method is advertised and the daemon applies and rolls back the bound call rewrite
