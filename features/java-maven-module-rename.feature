@@ -178,3 +178,18 @@ Business Need: Rename one proven direct-child Maven module without widening writ
       | explicit      | linked ancestor         | components/library         | refuses an unsafe destination |
       | explicit      | blocking file           | components/library         | refuses an unsafe destination |
       | explicit      | absent parent directory | library/components/library | refuses an unsafe destination |
+
+  @REQ-JAVA-MAVEN-MODULE-RENAME-001 @REQ-JAVA-MAVEN-MODULE-RENAME-001#recover-an-interrupted-rename-with-only-empty-conventional-outputs @functional-requirement
+  Scenario Outline: Recover an interrupted rename with only empty conventional outputs
+    Given the Maven directory move fixture has "explicit" and "absent parent directory"
+    When I interrupt a reviewed flat Maven module rename during its writes
+    And the interrupted Maven destination receives "<destination change>"
+    Then recovery "<outcome>" after the conflicting file is restored
+
+    Examples:
+      | destination change      | outcome                          |
+      | empty conventional dirs | restores the original workspace  |
+      | compiled class          | refuses without workspace writes |
+      | symbolic link           | refuses without workspace writes |
+      | arbitrary empty dir     | refuses without workspace writes |
+      | non-directory output    | refuses without workspace writes |

@@ -7,11 +7,15 @@ import io.cucumber.java.en.When
 import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.BuildModelStatus
+import org.refactorkit.core.JournalState
 import org.refactorkit.core.PatchEngine
+import org.refactorkit.core.PatchFaultInjector
+import org.refactorkit.core.PatchFaultPoint
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RollbackMode
+import org.refactorkit.core.TransactionLog
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.java.JavaRenameMavenModulePlanner
 import java.nio.file.Files
@@ -20,6 +24,7 @@ import java.nio.file.Path
 import java.util.Comparator
 import kotlin.io.path.invariantSeparatorsPathString
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -35,6 +40,7 @@ class JavaMavenNestedModuleMoveSteps {
     private lateinit var plan: PatchPlan
     private lateinit var target: String
     private lateinit var parentPath: String
+    private lateinit var interruptedFile: Path
 
     @Given("the Maven directory move fixture has {string} and {string}")
     fun prepare(parentPath: String, layout: String) {
@@ -128,6 +134,73 @@ class JavaMavenNestedModuleMoveSteps {
         assertEquals(listOf("marker"), Files.list(outside).use { files -> files.map { it.fileName.toString() }.toList() })
         assertEquals("outside directory", Files.readString(outside.resolve("marker")))
     }
+
+    @When("I interrupt a reviewed flat Maven module rename during its writes")
+    fun interruptFlatRename() {
+        target = "renamed-library"
+        plan = planner.preview(original, "library", target, target)
+        assertEquals(PatchStatus.PREVIEW, plan.status, plan.summary)
+        val interruptedEngine = PatchEngine(reactor, faultInjector = PatchFaultInjector { point, path, _ ->
+            if (point == PatchFaultPoint.AFTER_COMMITTED_IMAGE && path.startsWith(target) && path.toString().endsWith(".java")) {
+                interruptedFile = reactor.resolve(path)
+                throw InterruptedMavenApply()
+            }
+        })
+        assertFailsWith<InterruptedMavenApply> {
+            interruptedEngine.apply(plan, original, ApplyAuthorization.explicit("interrupted-maven", "acceptance"),
+                planner.diagnosticsGate(plan))
+        }
+        assertEquals(JournalState.APPLYING, journalState())
+        assertTrue(Files.isRegularFile(interruptedFile, NOFOLLOW_LINKS))
+    }
+
+    @When("the interrupted Maven destination receives {string}")
+    fun changeInterruptedDestination(change: String) {
+        val output = reactor.resolve("$target/target")
+        Files.createDirectories(output)
+        when (change) {
+            "empty conventional dirs" -> {
+                Files.createDirectory(output.resolve("classes"))
+                Files.createDirectory(output.resolve("test-classes"))
+            }
+            "compiled class" -> write("$target/target/classes/Foreign.class", "independent compiled output")
+            "symbolic link" -> Files.createSymbolicLink(output.resolve("classes"), outside)
+            "arbitrary empty dir" -> Files.createDirectory(output.resolve("generated"))
+            "non-directory output" -> write("$target/target/classes", "independent file")
+            else -> error("Unknown interrupted destination change: $change")
+        }
+    }
+
+    @Then("recovery {string} after the conflicting file is restored")
+    fun recoverInterruptedRename(outcome: String) {
+        val movedBytes = Files.readString(interruptedFile)
+        Files.writeString(interruptedFile, movedBytes + "// independent edit\n")
+        val conflict = capture()
+        val engine = PatchEngine(reactor)
+        assertTrue(engine.recover().any { it.code == "transaction.recoveryRequired" })
+        assertEquals(JournalState.RECOVERY_REQUIRED, journalState())
+        assertEquals(conflict, capture())
+        Files.writeString(interruptedFile, movedBytes)
+        val beforeRetry = capture()
+        val diagnostics = engine.recover()
+        if (outcome == "restores the original workspace") {
+            assertTrue(diagnostics.isEmpty(), "A retry with empty conventional outputs must complete: $diagnostics")
+            assertEquals(JournalState.ROLLED_BACK, journalState())
+            assertEquals(baseline, capture())
+            assertEquals(original.hash, scan().hash)
+        } else {
+            assertEquals("refuses without workspace writes", outcome)
+            assertTrue(diagnostics.any { it.code == "transaction.recoveryRequired" })
+            assertEquals(JournalState.RECOVERY_REQUIRED, journalState())
+            assertEquals(beforeRetry, capture())
+        }
+        assertEquals("outside directory", Files.readString(outside.resolve("marker")))
+    }
+
+    private fun journalState(): JournalState =
+        TransactionLog(reactor.resolve(".refactorkit/transactions")).listRecords().single().state
+
+    private class InterruptedMavenApply : Error()
 
     private fun modulePom(artifact: String, explicitPath: Boolean, dependencies: String = ""): String =
         "<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n" +

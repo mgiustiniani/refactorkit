@@ -2297,11 +2297,16 @@ class PatchEngine(
             markRecoveryRequired(record, "$reason; ${stageConflicts.joinToString("; ") { it.message }}")
             return false
         }
-        val cleanup = record.rollbackEmptyDirectoryIdentities
-        try {
+        val interruptedApply = record.state == JournalState.APPLYING ||
+            (record.state == JournalState.RECOVERY_REQUIRED &&
+                record.history.lastOrNull { it.state != JournalState.RECOVERY_REQUIRED }?.state == JournalState.APPLYING)
+        val cleanup = try {
             RollbackEmptyDirectories.validateScope(record.rollbackEmptyDirectories, record.createdDirectories, record.postImages)
-            require(record.rollbackEmptyDirectories.containsAll(cleanup.keys)) { "Rollback cleanup receipt exceeds its authorization" }
-            RollbackEmptyDirectories.verifyRecorded(normalizedRoot, cleanup)
+            val recorded = record.rollbackEmptyDirectoryIdentities
+            require(record.rollbackEmptyDirectories.containsAll(recorded.keys)) { "Rollback cleanup receipt exceeds its authorization" }
+            if (interruptedApply && recorded.isEmpty()) {
+                RollbackEmptyDirectories.observe(normalizedRoot, record.rollbackEmptyDirectories)
+            } else recorded.also { RollbackEmptyDirectories.verifyRecorded(normalizedRoot, it) }
         } catch (error: Exception) {
             markRecoveryRequired(record, "$reason; cannot verify optional rollback directories: ${error.message}")
             return false
@@ -2313,8 +2318,10 @@ class PatchEngine(
             markRecoveryRequired(record, "$reason; ${directoryConflicts.joinToString("; ") { it.message }}")
             return false
         }
+        val recovering = record.copy(rollbackEmptyDirectoryIdentities = cleanup)
         return try {
-            RetiredSourceDirectories.restore(normalizedRoot, record, ::forceWorkspaceDirectory, recovering = true)
+            if (cleanup != record.rollbackEmptyDirectoryIdentities) transactionLog.update(recovering)
+            RetiredSourceDirectories.restore(normalizedRoot, recovering, ::forceWorkspaceDirectory, recovering = true)
             val restoredCurrent = if (record.retiredSourceDirectory == null) current else current.keys.associateWith { path ->
                 require(validateNoSymbolicLinkTraversal(path) == null) { "Recovery path traverses a symbolic link: $path" }
                 readImage(path).also { content ->
@@ -2330,19 +2337,19 @@ class PatchEngine(
             if (ownsStagingReservation(record)) transactionLog.deleteStagingOwnership(record)
             if (restoredCurrent.any { (path, content) -> content != pre[path]?.content }) {
                 commitPostImages(
-                    record,
+                    recovering,
                     post.values.toList(),
                     pre.values.toList(),
                     pre.values.associate { it.path to it.posixPermissions },
                 )
             }
             removeCreatedDirectories(record.createdDirectories)
-            transactionLog.update(record.copy(
+            transactionLog.update(recovering.copy(
                 state = JournalState.ROLLED_BACK, failure = reason, rollbackEmptyDirectoryIdentities = emptyMap(),
             ))
             true
         } catch (error: Exception) {
-            markRecoveryRequired(record, "$reason; compensation failed: ${error.message}")
+            markRecoveryRequired(recovering, "$reason; compensation failed: ${error.message}")
             false
         }
     }

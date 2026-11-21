@@ -2433,7 +2433,10 @@ its hierarchy along with the saved files. Rollback reports a conflict when the
 old path has been recreated. A POM edit at the source path precedes the file
 move in the ordered work plan. The edited POM is installed at the destination.
 Linked or blocked destination ancestors, overlapping module roots and
-unqualified parent references refuse.
+unqualified parent references refuse. Recovery of an interrupted Apply may
+remove the conventional empty Maven output directories authorized in the
+transaction journal after checking their identity. An unrelated path, a link,
+a real generated file or an independent edit still requires manual resolution.
 
 The daemon advertises `features.nestedModuleDirectoryMove=true` on the
 `java.renameMavenModule` entry from `server.capabilities`. Consumers can use
