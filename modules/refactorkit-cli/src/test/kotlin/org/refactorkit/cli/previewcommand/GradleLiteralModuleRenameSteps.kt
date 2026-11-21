@@ -37,13 +37,24 @@ private class NativeGradleLiteralRenameFixture : AutoCloseable {
     private lateinit var snapshot: String
     private lateinit var context: JsonObject
     private lateinit var authority: JsonObject
+    private var literalConsumerBuild: String? = null
     private var kotlinDsl = false
     private var plan: JsonObject? = null
     private var failure: JsonRpcException? = null
 
     fun capture(dsl: String, form: String) {
-        require(dsl in setOf("Kotlin", "Groovy") && form in setOf("literal list", "conditional list", "inbound dependency"))
+        require(dsl in setOf("Kotlin", "Groovy") && form in setOf(
+            "literal list", "conditional list", "literal dependency", "dynamic dependency",
+        ))
         kotlinDsl = dsl == "Kotlin"
+        val buildName = if (kotlinDsl) "build.gradle.kts" else "build.gradle"
+        if (form == "literal dependency") literalConsumerBuild = "library/$buildName"
+        val dependency = when (form) {
+            "literal dependency" -> if (kotlinDsl) """dependencies { implementation(project(":app")) }"""
+                else "dependencies { implementation project(':app') }"
+            "dynamic dependency" -> "def targetPath = ':app'\ndependencies { implementation project(targetPath) }"
+            else -> ""
+        }
         sdk = Path.of(System.getenv("REFACTORKIT_JAVA_QUALIFICATION_SDK") ?: System.getProperty("java.home")).toRealPath()
         gradle = Path.of(requireNotNull(System.getenv("REFACTORKIT_GRADLE_EXECUTABLE"))).toRealPath()
         val workspace = Files.createTempDirectory("rk-gradle-literal-rename-"); root = workspace
@@ -55,16 +66,26 @@ private class NativeGradleLiteralRenameFixture : AutoCloseable {
             settings to "rootProject.name = \"literal-rename\"\n$included\n",
             "gradle.properties" to "org.gradle.jvmargs=-Xmx384m\norg.gradle.daemon=false\norg.gradle.java.installations.auto-detect=false\norg.gradle.java.installations.auto-download=false\norg.gradle.java.installations.paths=$sdk\n",
             "app/src/main/java/fixture/App.java" to "package fixture; public final class App { public int value() { return 1; } }\n",
-            "library/src/main/java/fixture/Library.java" to "package fixture; public final class Library {}\n",
+            "library/src/main/java/fixture/Library.java" to if (dependency.isNotEmpty())
+                "package fixture; public final class Library { public int read() { return new App().value(); } }\n"
+                else "package fixture; public final class Library {}\n",
         )
         for (module in listOf("app", "library")) {
             val script = if (kotlinDsl) "plugins { java }\njava { sourceCompatibility = JavaVersion.VERSION_1_8; targetCompatibility = JavaVersion.VERSION_1_8 }\n"
                 else "plugins { id 'java' }\njava { sourceCompatibility = JavaVersion.VERSION_1_8; targetCompatibility = JavaVersion.VERSION_1_8 }\n"
-            inputs["$module/" + if (kotlinDsl) "build.gradle.kts" else "build.gradle"] = script +
-                if (module == "library" && form == "inbound dependency") "dependencies { implementation project(':app') }\n" else ""
+            inputs["$module/$buildName"] = script +
+                if (module == "library" && dependency.isNotEmpty()) "$dependency\n" else ""
         }
         inputs.forEach { (path, text) -> write(workspace, path, text) }; originals = inputs
         session = newGradleContextRpcSession()
+        val capability = rpc("server.capabilities", buildJsonObject {}).getValue("methods").jsonArray
+            .map(JsonElement::jsonObject)
+            .single { it.getValue("name").jsonPrimitive.content == "java.renameGradleModule" }
+            .getValue("features").jsonObject
+        listOf(
+            "literalSettingsOnly", "inboundProjectDependenciesRefused",
+            "literalInboundProjectDependencies", "unqualifiedInboundProjectDependenciesRefused",
+        ).forEach { flag -> assertEquals(true, capability.getValue(flag).jsonPrimitive.boolean, flag) }
         val opened = rpc("project.open", buildJsonObject { put("root", workspace.toString()) })
         val synced = rpc("project.sync", buildJsonObject {
             put("buildSystem", "gradle"); put("expectedSnapshotHash", opened.getValue("snapshotHash"))
@@ -105,7 +126,13 @@ private class NativeGradleLiteralRenameFixture : AutoCloseable {
             if (status == "REFUSED") assertEquals(refusal, result.getValue("refusalCode").jsonPrimitive.content)
             else {
                 assertEquals("none", refusal)
-                assertTrue(result.getValue("renderedDiff").jsonPrimitive.content.contains("projectDir"))
+                val diff = result.getValue("renderedDiff").jsonPrimitive.content
+                assertTrue(diff.contains("projectDir"))
+                literalConsumerBuild?.let { path ->
+                    assertTrue(diff.contains(path), diff)
+                    val expected = if (kotlinDsl) """implementation(project(":renamed"))""" else "implementation project(':renamed')"
+                    assertTrue(diff.contains(expected), diff)
+                }
             }
         }
         assertEquals(originals, contents())
@@ -124,7 +151,9 @@ private class NativeGradleLiteralRenameFixture : AutoCloseable {
         assertEquals("applied", applied.getValue("status").jsonPrimitive.content, applied.toString())
         val mapping = if (kotlinDsl) "project(\":renamed\").projectDir = file(\"app\")\n"
             else "project(':renamed').projectDir = file('app')\n"
-        val expected = originals + (settings to (originals.getValue(settings).replace(":app", ":renamed") + mapping))
+        val expected = originals.toMutableMap()
+        expected[settings] = originals.getValue(settings).replace(":app", ":renamed") + mapping
+        literalConsumerBuild?.let { expected[it] = originals.getValue(it).replace(":app", ":renamed") }
         assertEquals(expected, contents())
         assertTrue(Files.isDirectory(requireNotNull(root).resolve("app")))
         assertFalse(Files.exists(requireNotNull(root).resolve("renamed")))

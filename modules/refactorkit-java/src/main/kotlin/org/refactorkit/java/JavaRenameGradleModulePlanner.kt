@@ -4,6 +4,8 @@ import org.refactorkit.core.AuthoritativeDiagnosticsEvaluation
 import org.refactorkit.core.AuthoritativeDiagnosticsProvider
 import org.refactorkit.core.BuildModel
 import org.refactorkit.core.BuildModelStatus
+import org.refactorkit.core.BuildModule
+import org.refactorkit.core.ClasspathEvidenceKind
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.OperationAuthorityFileEvidence
@@ -85,12 +87,6 @@ class JavaRenameGradleModulePlanner {
         if (selectedModules.any { it.attributes["gradle.projectPath"] == newProjectPath }) {
             return refused(snapshot, DESTINATION_EXISTS, "New Gradle project path already exists in the selected build")
         }
-        if (model.modules.any { module ->
-                module.sourceSets.any { sourceSet -> sourceSet.moduleDependencies.any { it.targetModuleId == oldModule.id } }
-            }
-        ) return refused(snapshot, DEPENDENCY_UNSUPPORTED,
-            "A project dependency refers to the old Gradle project identity; update it in a separately qualified operation")
-
         val oldProjectDirectory = projectPathDirectory(oldProjectPath)
             ?: return refused(snapshot, INVALID_PATH, "Old Gradle project path is not canonical")
         val newProjectPathDirectory = projectPathDirectory(newProjectPath)
@@ -144,6 +140,10 @@ class JavaRenameGradleModulePlanner {
             return refused(snapshot, PHYSICAL_IDENTITY_UNSUPPORTED,
                 "Settings mapping does not preserve the synchronized module's conventional physical directory")
         }
+        val inbound = JavaGradleInboundProjectEdits.capture(
+            snapshot, model, oldModule, settingsFile, oldProjectPath, newProjectPath,
+        ) ?: return refused(snapshot, DEPENDENCY_UNSUPPORTED,
+            "The captured inbound Gradle project dependencies do not have closed literal origins in local build scripts")
 
         val projectedModel = projectModel(model, oldModule, newProjectPath, buildRootIdentity)
             ?: return refused(snapshot, MODEL_PROJECTION_UNSUPPORTED,
@@ -151,8 +151,7 @@ class JavaRenameGradleModulePlanner {
         val projectedModule = projectedModel.modules.singleOrNull { it.attributes["gradle.projectPath"] == newProjectPath }
             ?: return refused(snapshot, MODEL_PROJECTION_UNSUPPORTED, "Projected Gradle module identity is not unique")
         if (projectedModule.root != oldModule.root || projectedModule.sourceSets != oldModule.sourceSets ||
-            projectedModel.modules.size != model.modules.size ||
-            projectedModel.modules.filter { it.id != projectedModule.id } != model.modules.filter { it.id != oldModule.id }
+            projectedModel.modules.size != model.modules.size
         ) return refused(snapshot, MODEL_PROJECTION_UNSUPPORTED,
             "Staged ownership, dependencies, source roots, outputs, or ordered classpaths differ from the synchronized model")
 
@@ -170,8 +169,9 @@ class JavaRenameGradleModulePlanner {
             ),
             inspected.insertedText,
         )
+        val settingsEdit = FileEdit.Modify(settingsFile.path, listOf(literalEdit, append))
         val edit = try {
-            WorkspaceEditSimulator.normalize(WorkspaceEdit(listOf(FileEdit.Modify(settingsFile.path, listOf(literalEdit, append)))))
+            WorkspaceEditSimulator.normalize(WorkspaceEdit(listOf(settingsEdit) + inbound.edits))
         } catch (_: IllegalArgumentException) {
             return refused(snapshot, SETTINGS_UNAVAILABLE, "Gradle settings rename edits overlap or cannot be normalized")
         }
@@ -192,12 +192,21 @@ class JavaRenameGradleModulePlanner {
             "gradleExportSha256" to model.attributes.getValue("gradle.exportSha256"),
             "projectedGradleModelSha256" to sha256(projectedModel.toString().toByteArray(StandardCharsets.UTF_8)),
         )
-        val files = listOf(OperationAuthorityFileEvidence(
-            kind = "gradle-settings",
-            path = settingsFile.path,
-            expectedContentSha256 = sha256(settingsFile.content.toByteArray(StandardCharsets.UTF_8)),
-            attributes = mapOf("dsl" to settingsDsl.name, "oldProjectPath" to oldProjectPath, "newProjectPath" to newProjectPath),
-        ))
+        val files = buildList {
+            add(OperationAuthorityFileEvidence(
+                kind = "gradle-settings",
+                path = settingsFile.path,
+                expectedContentSha256 = sha256(settingsFile.content.toByteArray(StandardCharsets.UTF_8)),
+                attributes = mapOf("dsl" to settingsDsl.name, "oldProjectPath" to oldProjectPath, "newProjectPath" to newProjectPath),
+            ))
+            inbound.scripts.forEach { script ->
+                add(OperationAuthorityFileEvidence(
+                    kind = "gradle-build-script",
+                    path = script.path,
+                    expectedContentSha256 = sha256(script.content.toByteArray(StandardCharsets.UTF_8)),
+                ))
+            }
+        }
         val lease = OperationAuthorityLease(
             kind = LEASE_KIND,
             operation = OPERATION,
@@ -282,7 +291,7 @@ class JavaRenameGradleModulePlanner {
 
     private fun projectModel(
         model: BuildModel,
-        oldModule: org.refactorkit.core.BuildModule,
+        oldModule: BuildModule,
         newProjectPath: String,
         buildRootIdentity: String,
     ): BuildModel? {
@@ -299,17 +308,30 @@ class JavaRenameGradleModulePlanner {
             attributes = newAttributes,
         )
         return runCatching {
-            model.copy(modules = model.modules.map { if (it.id == oldModule.id) renamed else it })
+            model.copy(modules = model.modules.map { module ->
+                if (module.id == oldModule.id) renamed else module.copy(sourceSets = module.sourceSets.map { set ->
+                    set.copy(
+                        moduleDependencies = set.moduleDependencies.map { edge ->
+                            if (edge.targetModuleId == oldModule.id) edge.copy(targetModuleId = newId) else edge
+                        },
+                        attributes = set.attributes.mapValues { (key, value) ->
+                            if (key.startsWith(GRADLE_RUNTIME_ARTIFACT_OWNER_PREFIX) && value == oldModule.id) newId else value
+                        },
+                    )
+                })
+            })
         }.getOrNull()
     }
 
     private fun stagedSnapshot(snapshot: ProjectSnapshot, edit: WorkspaceEdit): ProjectSnapshot {
         val normalized = WorkspaceEditSimulator.normalize(edit)
-        val settingsEdit = normalized.edits.filterIsInstance<FileEdit.Modify>().singleOrNull()
-            ?: throw IllegalArgumentException("Gradle rename staging requires one settings-file modification")
-        require(normalized.edits.size == 1 && settingsEdit.path.fileName?.toString() in
-            setOf("settings.gradle", "settings.gradle.kts")) {
-            "Gradle rename staging accepts only one settings-file modification"
+        val modifications = normalized.edits.filterIsInstance<FileEdit.Modify>()
+        require(modifications.size == normalized.edits.size &&
+            modifications.count { it.path.fileName.toString() in JavaGradleInboundProjectEdits.settingsNames } == 1 &&
+            modifications.all { it.path.fileName.toString() in JavaGradleInboundProjectEdits.settingsNames ||
+                it.path.fileName.toString() in JavaGradleInboundProjectEdits.buildNames }
+        ) {
+            "Gradle rename staging requires one settings modification and only qualified build-script modifications"
         }
         val model = snapshot.buildModels.singleOrNull { it.providerId == "gradle-effective-v1" }
             ?.takeIf { it.status == BuildModelStatus.AVAILABLE }
@@ -317,32 +339,42 @@ class JavaRenameGradleModulePlanner {
         require(model.attributes["gradle.exportSha256"]?.matches(Regex("[a-f0-9]{64}")) == true) {
             "Gradle rename staging requires the exact synchronized Gradle model"
         }
-        val settingsBefore = snapshot.trackedFiles.singleOrNull { it.path.normalize() == settingsEdit.path.normalize() }?.content
-            ?: throw IllegalArgumentException("Selected Gradle settings are absent from the snapshot")
-        val settingsAfter = WorkspaceEditSimulator.apply(snapshot, WorkspaceEdit(listOf(settingsEdit)))
-            .trackedFiles.single { it.path.normalize() == settingsEdit.path.normalize() }.content
-        require(settingsAfter.toByteArray(StandardCharsets.UTF_8).size <= MAX_TEXT_INPUT_BYTES) {
-            "Updated Gradle settings exceed the bounded text-input size"
-        }
+        val staged = WorkspaceEditSimulator.apply(snapshot, normalized)
+        val beforeContent = snapshot.auxiliaryFiles.associateBy { it.path.normalize() }
+        val afterContent = staged.auxiliaryFiles.associateBy { it.path.normalize() }
         val attributes = model.attributes
         require(attributes[TEXT_INPUT_STATUS] == "complete") { "Complete Gradle text-input inventory is required" }
         val inputCount = attributes[TEXT_INPUT_COUNT]?.toIntOrNull()
             ?: throw IllegalArgumentException("Gradle snapshot lacks a bounded text-input count")
         val inputBytes = attributes[TEXT_INPUT_BYTES]?.toLongOrNull()
             ?: throw IllegalArgumentException("Gradle snapshot lacks a bounded text-input byte count")
-        val nextInputBytes = inputBytes - settingsBefore.toByteArray(StandardCharsets.UTF_8).size +
-            settingsAfter.toByteArray(StandardCharsets.UTF_8).size
+        val nextInputBytes = inputBytes + modifications.sumOf { modification ->
+            val path = modification.path.normalize()
+            val beforeBytes = beforeContent.getValue(path).content.toByteArray(StandardCharsets.UTF_8).size.toLong()
+            val afterBytes = afterContent.getValue(path).content.toByteArray(StandardCharsets.UTF_8).size.toLong()
+            require(afterBytes <= MAX_TEXT_INPUT_BYTES) { "Updated Gradle script exceeds the bounded text-input size" }
+            afterBytes - beforeBytes
+        }
         require(inputCount in 1..MAX_TEXT_INPUTS && nextInputBytes in 0..MAX_TOTAL_TEXT_BYTES) {
             "Gradle rename would exceed the complete text-input inventory bounds"
         }
-        val staged = WorkspaceEditSimulator.apply(snapshot, edit)
         val invalidated = JavaGradleBuildInputInvalidation.invalidate(model).copy(
             attributes = attributes + mapOf(
                 TEXT_INPUT_COUNT to inputCount.toString(),
                 TEXT_INPUT_BYTES to nextInputBytes.toString(),
             ),
         )
-        return staged.copy(buildModels = staged.buildModels.map { if (it.providerId == model.providerId) invalidated else it })
+        val modifiedPaths = modifications.mapTo(hashSetOf()) { it.path.normalize() }
+        val declarationEvidence = staged.classpathEvidence.map { evidence ->
+            val path = evidence.path.normalize()
+            if (evidence.kind == ClasspathEvidenceKind.DECLARATION_FILE && path in modifiedPaths)
+                evidence.stagedDeclaration(afterContent.getValue(path).content)
+            else evidence
+        }
+        return staged.copy(
+            classpathEvidence = declarationEvidence,
+            buildModels = staged.buildModels.map { if (it.providerId == model.providerId) invalidated else it },
+        )
     }
 
     private fun projectPathDirectory(value: String): Path? {

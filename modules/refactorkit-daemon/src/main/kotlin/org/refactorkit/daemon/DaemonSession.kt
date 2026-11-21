@@ -4760,7 +4760,10 @@ class DaemonSession(
                     "literalSettingsOnly" to true,
                     "preservePhysicalProjectDirectory" to true,
                     "explicitGradleSyncRequired" to true,
+                    // Keep the original discovery gate for settings-only clients.
                     "inboundProjectDependenciesRefused" to true,
+                    "literalInboundProjectDependencies" to true,
+                    "unqualifiedInboundProjectDependenciesRefused" to true,
                 ),
             ),
         )

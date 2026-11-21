@@ -33,4 +33,6 @@ Feature: Rename a Gradle Java project through the managed refactoring route
       | Kotlin | literal list       | PREVIEW | none                                                                  |
       | Groovy | literal list       | PREVIEW | none                                                                  |
       | Kotlin | conditional list   | REFUSED | java.renameGradleModule.settingsIncludeUnsupported                     |
-      | Groovy | inbound dependency | REFUSED | java.renameGradleModule.inboundProjectDependencyUnsupported            |
+      | Kotlin | literal dependency | PREVIEW | none                                                                  |
+      | Groovy | literal dependency | PREVIEW | none                                                                  |
+      | Groovy | dynamic dependency | REFUSED | java.renameGradleModule.inboundProjectDependencyUnsupported            |

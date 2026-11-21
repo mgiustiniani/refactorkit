@@ -23,6 +23,13 @@ data class ClasspathEvidence(
     val kind: ClasspathEvidenceKind,
     val fingerprint: String,
 ) {
+    fun stagedDeclaration(content: String): ClasspathEvidence {
+        require(kind == ClasspathEvidenceKind.DECLARATION_FILE)
+        val digest = fileDigest(kind.name.lowercase())
+        digest.update(content.toByteArray(Charsets.UTF_8))
+        return copy(fingerprint = digest.hexDigest())
+    }
+
     companion object {
         fun capture(workspaceRoot: Path, path: Path, kind: ClasspathEvidenceKind): ClasspathEvidence {
             val normalizedPath = path.normalize()
@@ -117,10 +124,13 @@ data class ClasspathEvidence(
         }
 
         private fun hashFile(path: Path, marker: String): String {
-            val digest = MessageDigest.getInstance("SHA-256")
-            digest.update("$marker\u0000".toByteArray(Charsets.UTF_8))
+            val digest = fileDigest(marker)
             updateFileContent(digest, path)
             return digest.hexDigest()
+        }
+
+        private fun fileDigest(marker: String): MessageDigest = MessageDigest.getInstance("SHA-256").apply {
+            update("$marker\u0000".toByteArray(Charsets.UTF_8))
         }
 
         private fun updateFileContent(digest: MessageDigest, path: Path) {

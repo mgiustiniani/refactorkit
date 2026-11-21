@@ -8669,22 +8669,28 @@ build/module transformation backlog, alongside Maven transformations. The first
 bounded Gradle rename route, `java.renameGradleModule`, is now **EXPERIMENTAL** on
 the source-built daemon API under
 `REQ-JAVA-GRADLE-MODULE-RENAME-001#rename-a-gradle-module-path-with-managed-rollback`.
-It requires an exact current Gradle sync and Java SDK context, a unique selected
-path among supported unconditional literal includes, no existing `projectDir`
-mapping, no modeled
-inbound project dependency, and an unchanged conventional physical project
-directory. The planner projects the typed module identity and verifies that source
-sets, roots, outputs, dependencies, and ordered classpaths remain unchanged; the
-preview edits only the settings file and retains the projection in its operation
-lease. Managed Apply invalidates the old Gradle model; normal rollback restores the
-captured workspace, after which a current model is available again. The admitted
-legacy Story text describes Kotlin/Groovy positive Apply/rollback and refusals
-for explicit directory mappings and conditional includes; its missing effective
-glue remains actionable. The subsequent native four-case multiproject Story
-qualifies literal-list positives and conditional/inbound-dependency refusals;
-see <<ide-gradle-multiple-includes-public-2026-11-14>>. Dynamic or otherwise unsupported DSL,
-stale contexts, collisions, and inbound modeled dependencies refuse. The existing
-`java.rename-module` remains Maven-specific and provides no Gradle evidence.
+It requires a current Gradle sync and Java SDK context, a unique unconditional
+literal include, a conventional physical project directory and an unoccupied
+destination. The rename pins the new logical path to the existing directory.
+Within one synchronized build, it also updates an inbound
+`implementation(project(":old"))` or Groovy `implementation project(':old')`
+where each resolved inbound edge has a unique literal origin in a captured
+local build script. Dynamic or ambiguous declarations, composite dependencies
+and external initialization scripts refuse with
+`java.renameGradleModule.inboundProjectDependencyUnsupported`.
+The managed diff lists the settings and consumer script edits. Apply invalidates
+the synchronized model, and normal rollback restores the saved inputs and model
+identity. The multiproject Story verifies this flow against offline builds on
+copies of the Kotlin DSL and Groovy fixtures.
+
+On the `java.renameGradleModule` capability, `literalInboundProjectDependencies`
+advertises the additional edit authority and
+`unqualifiedInboundProjectDependenciesRefused` marks its refusal boundary.
+`literalSettingsOnly` and `inboundProjectDependenciesRefused` remain true for
+clients that use the original settings-only discovery contract. Clients that
+recognize the extension use the two new flags to interpret inbound support.
+The legacy composite Story still has missing effective glue (`actionable`).
+The CLI command `java.rename-module` remains Maven-specific.
 
 This route does not implement physical Gradle module relocation or any mixed
 Maven/Gradle ownership transform. Gradle dependency and source-set transforms and
