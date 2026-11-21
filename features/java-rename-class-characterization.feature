@@ -66,6 +66,17 @@ Ability: Rename a Java class, interface, enum, or record type exactly with JDT b
     And the plan leaves the declaration path unchanged and contains no FileEdit.Rename
     And the plan edits the selected nested type and only references bound to it
 
+  @REQ-JAVA-RENAME-CLASS-CHAR-001#top-level-type-rename-uses-jdt-on-the-package-line
+  Scenario Outline: Top-level type rename uses JDT on the package line
+    Given a Maven project has a compact top-level type and a rename destination that is "<destination>"
+    When an IDE previews renameClass for the compact declaration
+    Then the saved source remains intact and the daemon reports "<outcome>"
+
+    Examples:
+      | destination | outcome                          |
+      | available   | a binding-backed rename preview  |
+      | occupied    | an existing target type refusal  |
+
   # Scenario 2: framework annotation findings elevate risk to HIGH and add framework warnings
   @REQ-JAVA-RENAME-CLASS-CHAR-001 @functional-requirement
   Scenario Outline: A renameClass declaration carrying a <framework> annotation is previewed with HIGH risk and framework warnings

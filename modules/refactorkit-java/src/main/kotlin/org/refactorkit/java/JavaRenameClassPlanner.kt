@@ -36,8 +36,8 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
             return refused(snapshot, "renameClass", "Old and new type names are the same: $requestedOldSimple")
         }
 
-        // The language-neutral index currently contains top-level types only. JDT
-        // supplies the exact nested declaration identity without widening that index.
+        // The index supplies the lexical fallback. JDT can also identify
+        // declarations that the index does not capture.
         val index = adapter.buildSymbols(snapshot)
         val symbol = index.symbols.find {
             it.id.value == symbolFqn && it.kind in RENAMEABLE_KINDS
@@ -47,7 +47,7 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
             candidate.qualifiedName == symbolFqn && candidate.kind in JDT_RENAMEABLE_KINDS
         }
         val nestedTarget = jdtTarget?.takeIf { it.ownerQualifiedName != null }
-        if (symbol == null && nestedTarget == null) {
+        if (symbol == null && jdtTarget == null) {
             return refused(snapshot, "renameClass", "Symbol not found or not a renameable type: $symbolFqn")
         }
         val oldSimple = jdtTarget?.simpleName ?: symbol!!.name
@@ -65,13 +65,14 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
             return refused(snapshot, "renameClass", "Nested type rename requires clean JDT binding evidence: $symbolFqn")
         }
 
-        val declarationPath = symbol?.location?.path ?: nestedTarget!!.path
+        val declarationPath = symbol?.location?.path ?: requireNotNull(jdtTarget).path
         val declarationFile = snapshot.files.find { it.path == declarationPath }
             ?: return refused(snapshot, "renameClass", "Declaration file not found: $declarationPath")
         JavaGeneratedSourcePolicy.reason(declarationFile)?.let { reason ->
             return refused(snapshot, "renameClass", "Generated source cannot be rewritten: ${declarationFile.path} ($reason)")
         }
-        val newFilePath = if (nestedTarget == null) {
+        val ownsDeclarationFile = symbol != null || declarationFile.path.fileName.toString() == "$oldSimple.java"
+        val newFilePath = if (nestedTarget == null && ownsDeclarationFile) {
             declarationFile.path.resolveSibling("$newSimpleName.java")
         } else {
             null
@@ -79,7 +80,10 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
         val targetExists = if (nestedTarget != null) {
             semanticAnalysis!!.symbols.any { it.qualifiedName == newFqn && it.path == declarationFile.path }
         } else {
-            index.symbols.any { it.id.value == newFqn } || snapshot.files.any { it.path == newFilePath }
+            index.symbols.any { it.id.value == newFqn } || snapshot.files.any { it.path == newFilePath } ||
+                semanticAnalysis?.symbols.orEmpty().any {
+                    it.qualifiedName == newFqn && it.ownerQualifiedName == null && it.kind in JDT_RENAMEABLE_KINDS
+                }
         }
         if (targetExists) {
             val targetDetail = newFilePath?.let { " ($it)" }.orEmpty()
@@ -89,6 +93,9 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
         val jdtEvidence = buildJdtRenameEvidence(semanticAnalysis, symbolFqn, newSimpleName, declarationFile.path)
         if (nestedTarget != null && jdtEvidence == null) {
             return refused(snapshot, "renameClass", "Nested type rename requires clean JDT binding evidence: $symbolFqn")
+        }
+        if (symbol == null && jdtEvidence == null) {
+            return refused(snapshot, "renameClass", "Top-level type rename requires clean JDT binding evidence: $symbolFqn")
         }
         jdtEvidence?.let { evidence ->
             val frameworkAssessment = JavaFrameworkDetector.assess(declarationFile)
@@ -203,7 +210,7 @@ class JavaRenameClassPlanner(private val adapter: JavaLanguageAdapter) {
             symbol.qualifiedName == symbolFqn && symbol.kind in JDT_RENAMEABLE_KINDS
         } ?: return null
         if (target.path != declarationPath || target.recovered) return null
-        val bindingKey = target.bindingKey ?: return null
+        val bindingKey = target.bindingKey?.takeIf(String::isNotBlank) ?: return null
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
         fun add(path: Path, range: SourceRange) {
             editsByPath.getOrPut(path) { mutableListOf() } += TextEdit(range, newSimpleName)
