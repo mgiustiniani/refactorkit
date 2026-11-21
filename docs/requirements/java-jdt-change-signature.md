@@ -69,6 +69,13 @@ hierarchies refuse before managed mutation. Hierarchy removal continues to
 require explicit external-consumer-risk acceptance and applies the same purity
 guard to every affected call.
 
+When a discarded argument fails that guard because it may have observable
+effects, daemon `refactor.preview` returns `-32001` with
+`error.data.refusalCode` set to `java.changeSignature.removedArgumentMayHaveEffects`.
+The explanatory message is preserved and the refusal creates no plan or
+transaction. The saved-cursor Story checks method calls, field increments and
+the separate argument-comment refusal.
+
 The Story `REQ-JAVA-CHANGE-SIGNATURE-REMOVE-001#an-unused-jdt-bound-parameter-is-removed-through-managed-java-surfaces`
 checks capability truth across adapter descriptors, daemon discovery, the SDK
 catalogue and API 0.2; daemon/MCP preview, diagnostics, Apply and exact rollback;

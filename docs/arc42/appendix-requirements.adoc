@@ -8480,6 +8480,12 @@ effectful/unproven expressions and argument comments refuse before mutation.
 The Story also checks adapter, SDK and API 0.2 authority agreement. Packaged and
 native IDE qualification remain open. The IDE's custom LSP
 signature command remains independently gated.
+The saved-cursor follow-up under `REQ-JAVA-CHANGE-SIGNATURE-REMOVE-001` preserves
+the daemon's `-32001` refusal and adds
+`java.changeSignature.removedArgumentMayHaveEffects` in `error.data.refusalCode`
+for the call-site effect guard. The Story covers a method call and a field
+increment and checks that the comment refusal stays distinct. All three cases
+preserve the source and POM without creating a plan or transaction.
 The follow-up Story
 `REQ-JAVA-CHANGE-SIGNATURE-REORDER-001#saved-cursor-reordering-applies-and-rolls-back-exact-jdt-bound-edits`
 exercises that same managed operation from a fresh saved-source

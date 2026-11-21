@@ -14,6 +14,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.refactorkit.core.JsonRpcException
+import org.refactorkit.core.JsonRpcErrorCodes
 import org.refactorkit.core.JournalState
 import org.refactorkit.core.TransactionLog
 import org.refactorkit.daemon.DaemonSession
@@ -73,6 +74,8 @@ class JavaChangeVisibilitySteps {
     private lateinit var extractParameterMcpJavaContext: JsonObject
     private lateinit var extractParameterMcpPreviewText: String
     private lateinit var parameterRename: JavaParameterRenameStoryFixture
+    private lateinit var removeParameterPom: String
+    private lateinit var removeParameterRefusal: JsonRpcException
     private lateinit var encapsulateFieldReaderPath: Path
     private lateinit var encapsulateFieldSource: String
     private lateinit var encapsulateFieldReaderSource: String
@@ -167,6 +170,72 @@ class JavaChangeVisibilitySteps {
 
     @And("daemon and MCP parameter-rename transactions pass diagnostics and restore exact source bytes")
     fun verifyParameterRenameRollback() = parameterRename.assertRestored()
+
+    @Given("an SDK-bound Maven method whose unused parameter receives a {string}")
+    fun openRemoveParameterFixture(shape: String) {
+        val argument = when (shape) {
+            "method call" -> "next()"
+            "field increment" -> "calls++"
+            "commented literal" -> "/* keep this comment */ 1"
+            else -> error("Unsupported remove-parameter argument: $shape")
+        }
+        openFixture(
+            """
+                package com.acme;
+                public class Service {
+                    private int calls;
+                    private int next() { return calls++; }
+                    public int execute() { return helper($argument); }
+                    private int helper(int value) { return 7; }
+                }
+            """,
+        )
+        removeParameterPom = Files.readString(root.resolve("pom.xml"))
+        val provider = "maven-effective-v1"
+        val module = context.getValue("modules").jsonArray.map { it.jsonObject }
+            .single { it.getValue("providerId").jsonPrimitive.content == provider }
+        context = session.dispatch("project.context.v7", buildJsonObject {
+            put("expectedSnapshotHash", snapshotHash)
+            put("sdkHome", sdkHome.toString())
+            put("providerId", provider)
+            put("moduleId", module.getValue("id"))
+            put("sourceSetId", "main")
+        }).jsonObject
+        assertEquals("available", context.getValue("status").jsonPrimitive.content)
+    }
+
+    @When("I preview removal at the saved cursor for the method")
+    fun previewSavedParameterRemoval() {
+        val selection = selectMethod("helper", parameter = "int value")
+        removeParameterRefusal = assertFailsWith<JsonRpcException> {
+            session.dispatch("refactor.preview", buildJsonObject {
+                put("languageId", "java")
+                put("operation", "changeSignature.removeParameter")
+                put("expectedSnapshotHash", snapshotHash)
+                put("javaContext", contextRequest())
+                put("javaSelection", selection)
+                put("arguments", buildJsonObject { put("name", "value") })
+            })
+        }
+    }
+
+    @Then("Remove Parameter refuses with {string} and preserves the Maven project")
+    fun verifyRemoveParameterRefusal(expected: String) {
+        assertEquals(JsonRpcErrorCodes.PLAN_REFUSED, removeParameterRefusal.code)
+        val data = removeParameterRefusal.data?.jsonObject
+        assertEquals(expected.takeUnless { it == "none" }, data?.get("refusalCode")?.jsonPrimitive?.content)
+        assertFalse(data?.containsKey("planId") == true)
+        val message = if (expected == "none") {
+            "Call-site argument comments cannot be preserved by bounded parameter removal"
+        } else {
+            "Removed call-site argument may have observable effects; " +
+                "only literals and exact JDT-bound local/parameter reads are supported"
+        }
+        assertEquals(message, removeParameterRefusal.message)
+        assertEquals(sourceBefore, Files.readString(servicePath))
+        assertEquals(removeParameterPom, Files.readString(root.resolve("pom.xml")))
+        assertFalse(Files.exists(root.resolve(".refactorkit/transactions")))
+    }
 
     @When("I preview changeVisibility from private to public for the final helper method")
     fun previewVisibilityChange() {
@@ -1315,9 +1384,9 @@ class JavaChangeVisibilitySteps {
         context["schemaVersion"]?.jsonPrimitive?.content?.let { put("contextSchemaVersion", it) }
     }
 
-    private fun selectMethod(name: String): JsonObject {
+    private fun selectMethod(name: String, parameter: String = "String value"): JsonObject {
         val lines = Files.readString(servicePath).lines()
-        val line = lines.indexOfFirst { "$name(String value)" in it }
+        val line = lines.indexOfFirst { "$name($parameter)" in it }
         assertTrue(line >= 0, lines.joinToString("\n"))
         val response = session.dispatch("intelligence.query", buildJsonObject {
             put("requestId", "change-visibility-$name-selection")

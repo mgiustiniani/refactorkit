@@ -545,6 +545,11 @@ The changes retain API `0.2`; importer shape remains `experimental` while
 
 A refused preview must not silently fall back to text replacement. Clients should
 show the refusal, warnings, affected files when present, and next action.
+For `changeSignature.removeParameter`, a discarded argument that may have
+observable effects yields `-32001` and
+`error.data.refusalCode = "java.changeSignature.removedArgumentMayHaveEffects"`.
+Clients can use this code to present the refusal while retaining the explanatory
+message. The daemon issues no plan and leaves project inputs intact.
 The legacy `renameParameter` request alias resolves to the canonical engine
 operation, but it is not advertised in the SDK-bound operation catalogue; the
 managed-authority acceptance identity is `changeSignature.renameParameter`.

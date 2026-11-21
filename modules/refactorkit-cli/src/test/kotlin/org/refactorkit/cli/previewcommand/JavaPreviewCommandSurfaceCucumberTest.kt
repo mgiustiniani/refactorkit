@@ -33,8 +33,9 @@ import kotlin.test.assertTrue
 @SelectClasspathResource("owned-source-ancestor-identity.feature")
 @SelectClasspathResource("release-json-rpc-envelope.feature")
 @SelectClasspathResource("java-change-visibility.feature")
-// Select only the admitted parameter-rename scenario from the combined capability feature.
+// Select the admitted parameter-rename and remove-parameter refusal scenarios.
 @SelectClasspathResource(value = "java-capability-truth.feature", line = 18)
+@SelectClasspathResource(value = "java-capability-truth.feature", line = 105)
 @SelectClasspathResource("java-batch-cleanup.feature")
 @SelectClasspathResource("java-type-repair.feature")
 @SelectClasspathResource("java-extract-variable.feature")

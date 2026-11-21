@@ -100,3 +100,15 @@ Feature: Java refactoring capability truth
     When I request parameter reordering through the daemon and MCP
     Then the reorder outcome is "refused-before-transaction" with no workspace mutation
     And changeSignature.reorderParameters is advertised as "stable"
+
+  @REQ-JAVA-CHANGE-SIGNATURE-REMOVE-001#saved-cursor-removal-reports-the-observable-argument-effect
+  Scenario Outline: Saved cursor removal reports the observable argument effect
+    Given an SDK-bound Maven method whose unused parameter receives a "<argument>"
+    When I preview removal at the saved cursor for the method
+    Then Remove Parameter refuses with "<refusal>" and preserves the Maven project
+
+    Examples:
+      | argument          | refusal                                             |
+      | method call       | java.changeSignature.removedArgumentMayHaveEffects |
+      | field increment   | java.changeSignature.removedArgumentMayHaveEffects |
+      | commented literal | none                                                |

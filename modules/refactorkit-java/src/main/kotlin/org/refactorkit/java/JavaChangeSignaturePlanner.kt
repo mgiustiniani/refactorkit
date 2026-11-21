@@ -593,9 +593,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         if (selection.invocations.any { it.argumentRanges.size != selection.parameters.size }) {
             return refused(snapshot, operation, "JDT invocation argument count is incomplete for ${selection.method.qualifiedName}")
         }
-        removedArgumentRefusal(snapshot, selection.analysis, selection.invocations, removeIndex)?.let {
-            return refused(snapshot, operation, it)
-        }
+        removedArgumentRefusal(snapshot, operation, selection.analysis, selection.invocations, removeIndex)?.let { return it }
 
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
         val declarationText = selection.parameters.filterIndexed { index, _ -> index != removeIndex }
@@ -859,9 +857,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         if (invocations.any { it.argumentRanges.size != selection.parameters.size }) {
             return refused(snapshot, operation, "Hierarchy invocation evidence is incomplete")
         }
-        removedArgumentRefusal(snapshot, selection.analysis, invocations, selectedIndex)?.let {
-            return refused(snapshot, operation, it)
-        }
+        removedArgumentRefusal(snapshot, operation, selection.analysis, invocations, selectedIndex)?.let { return it }
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
         familyMethods.forEach { method ->
             val source = sources.getValue(method.path)
@@ -1005,22 +1001,23 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
 
     private fun removedArgumentRefusal(
         snapshot: ProjectSnapshot,
+        operation: String,
         analysis: JdtJavaSemanticAnalysisResult,
         invocations: List<JdtJavaSemanticInvocation>,
         removedIndex: Int,
-    ): String? {
+    ): PatchPlan? {
         for (invocation in invocations) {
             if (invocation.evidence != JdtJavaSemanticEvidence.JDT_BINDING) {
-                return "Removed call-site argument is not backed by complete JDT bindings"
+                return refused(snapshot, operation, "Removed call-site argument is not backed by complete JDT bindings")
             }
             val source = snapshot.files.singleOrNull { it.path == invocation.path }
-                ?: return "Removed call-site argument is unknown because a bound source file is missing"
+                ?: return refused(snapshot, operation, "Removed call-site argument is unknown because a bound source file is missing")
             val argumentList = sourceText(source.content, invocation.argumentListRange)
             if (argumentList.contains("//") || argumentList.contains("/*")) {
-                return "Call-site argument comments cannot be preserved by bounded parameter removal"
+                return refused(snapshot, operation, "Call-site argument comments cannot be preserved by bounded parameter removal")
             }
             val range = invocation.argumentRanges.getOrNull(removedIndex)
-                ?: return "JDT invocation does not contain the selected argument at index $removedIndex"
+                ?: return refused(snapshot, operation, "JDT invocation does not contain the selected argument at index $removedIndex")
             if (!isOrderIndependentReorderArgument(
                     source,
                     range,
@@ -1028,7 +1025,12 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
                     invocation.argumentLiteralFlags.getOrNull(removedIndex) == true,
                 )
             ) {
-                return "Removed call-site argument may have observable effects; only literals and exact JDT-bound local/parameter reads are supported"
+                return refused(
+                    snapshot, operation,
+                    "Removed call-site argument may have observable effects; " +
+                        "only literals and exact JDT-bound local/parameter reads are supported",
+                    code = "java.changeSignature.removedArgumentMayHaveEffects",
+                )
             }
         }
         return null
@@ -1598,7 +1600,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
     private fun mixedJvmSignatureRefusal(snapshot: ProjectSnapshot, operation: String): PatchPlan =
         refused(snapshot, operation, "Mixed Java/Kotlin change signature requires shared JVM caller identity and is not authorized by JDT-only evidence")
 
-    private fun refused(snapshot: ProjectSnapshot, operation: String, reason: String) = PatchPlan(
+    private fun refused(snapshot: ProjectSnapshot, operation: String, reason: String, code: String? = null) = PatchPlan(
         operation = operation,
         status = PatchStatus.REFUSED,
         snapshotHash = snapshot.hash,
@@ -1609,6 +1611,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         workspaceEdit = WorkspaceEdit(),
         warnings = listOf(reason),
         riskLevel = RiskLevel.HIGH,
+        refusalCode = code,
     )
 
     private fun jdtWarningIdentity(warning: JdtJavaSemanticWarning): String = listOf(
