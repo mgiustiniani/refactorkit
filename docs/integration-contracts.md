@@ -129,7 +129,8 @@ refuse without fallback. |
 | `refactorkit organize-imports <file...> [--apply] [--root <path>]` | `beta-contract` | Sort/deduplicate/remove same-package imports; clean JDT evidence also removes binding-proven unused exact imports, while wildcard/unresolved imports and unclean files remain conservative. Absolute and normalized workspace-relative selections target the same snapshot file; duplicates are collapsed. Missing/outside selections refuse the whole request with `java.sourceFileNotFound` / `java.pathOutsideWorkspace`. |
 | `refactorkit format-file <file> [--apply] [--root <path>]` | `beta-contract` | Formats one non-generated, syntactically valid Java compilation unit through Eclipse JDT using hash-bound project preferences or deterministic defaults; preview/apply/rollback remains mandatory. |
 | `refactorkit safe-delete --symbol <fqcn> [--force] [--apply] [path]` | `beta-contract` | Refuses referenced symbols by default; forced behavior requires explicit risk note. |
-| `refactorkit c safe-delete <root> --symbol <name> --preview` | `experimental` | C safe delete reports a compiler-proven preview for one isolated private function or refuses when semantic references are present; full consumer/configuration closure and managed apply are not qualified. |
+| `refactorkit c <query> <root> ...` | `experimental` | Read-only compiler-backed symbol search, definitions and references in the captured C context. See the C CLI command group below. |
+| `refactorkit c <operation> <root> ...` | `experimental` | Compiler-backed C refactorings with scoped preview, approval, managed Apply and rollback when the selected operation proves authority. See the C CLI command group below. |
 | `refactorkit patch recover [--root <path>]` | `experimental` | Explicitly authorized recovery acquires the writer lock, cleans orphan transaction temps and compensates incomplete journal states. Read-only project/session startup only inspects and refuses pending recovery; it never creates `.refactorkit` or `workspace.lock`. |
 | `refactorkit patch rollback <transaction-id> [--force] --root <path>` | `beta-contract` | Normal rollback validates exact post-images and refuses conflicts; `--force` is an explicit destructive pre-image restore. |
 | `refactorkit test-golden [case] [--golden-dir <path>]` | `beta-contract` | CI/test harness command for documented golden fixtures. |
@@ -139,6 +140,23 @@ refuse without fallback. |
 | `refactorkit recipe run ...` | `experimental` | Recipe schema is not yet a beta contract. |
 | `refactorkit outline`, `search`, `local-rename` | `experimental` | Multi-language structural features, not semantic Java refactoring contracts. |
 | Any unlisted/debug subcommand | `internal` | Not supported for external automation. |
+
+### Experimental C CLI command group
+
+The `c` group takes a workspace root and explicit `--clang`, `--clangd` and
+`--clang-format` paths. The compilation model captures the C11 or C17 settings
+for each translation unit. See the [C 0.8.0 plan](releases/v0.8.0-plan.md#reference-qualification-target)
+for the admitted toolchain and scope.
+
+- Read-only queries. `symbols`, `search`, `definition`, `references`.
+- Refactorings. `rename`, `rename-prefix`, `move`, `format`, `organize-includes`,
+  `safe-delete`, `change-signature`, `extract`, `inline`, `inline-local`, `relocate`.
+
+Refactorings preview by default. `--apply` requests managed Apply of a plan
+with current snapshot and compiler authority. Incomplete or stale evidence can
+refuse the operation. Use `refactorkit patch rollback <transaction-id> --root
+<path>` to restore its saved images. The [C delivery catalogue](releases/v0.8.0-plan.md#delivery-catalogue--17-actionable-tasks)
+records the bounded operation cases, including consumer and build-model limits.
 
 ### C13 safe-delete preview boundary
 

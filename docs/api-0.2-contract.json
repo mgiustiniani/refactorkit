@@ -34,6 +34,7 @@
       "local-rename",
       "typescript",
       "kotlin",
+      "c",
       "test-golden",
       "java create-module",
       "java rename-module",
