@@ -264,3 +264,15 @@ Ability: Delete a JDT-proven unused Java type with exact binding evidence, fall 
     When the IDE previews safeDelete for fixtures.orbit.Orphan with an SDK-bound daemon context
     Then RefactorKit reports an unmodeled workspace input and grants no Apply authority
     And managed Apply is refused without changing the reactor or transaction log
+
+  @REQ-JAVA-SAFE-DELETE-CHAR-001#new-inputs-invalidate-managed-maven-closure-under-lock @functional-requirement
+  Scenario Outline: New inputs invalidate managed Maven closure under lock
+    Given an available two-module Maven reactor has a package-private Java type with no source or text consumers
+    When an input appears "<phase>" while applying the previewed Maven closure
+    Then the inventory guard refuses with "<diagnostic>" before writing the reactor or its journal
+
+    Examples:
+      | phase                            | diagnostic                             |
+      | before lease validation          | snapshot.workspaceInventoryChanged     |
+      | during diagnostics               | snapshot.workspaceInventoryChanged     |
+      | as a link before lease validation | snapshot.workspaceInventoryUnavailable |

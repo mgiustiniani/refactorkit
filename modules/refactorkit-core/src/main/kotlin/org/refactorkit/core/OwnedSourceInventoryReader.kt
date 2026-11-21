@@ -56,6 +56,16 @@ class OwnedSourceInventoryReader(
     }
 
     companion object {
+        /** Enumerate owned workspace file membership without opening the file contents. */
+        fun captureWorkspaceFilePaths(snapshot: ProjectSnapshot): Set<Path> {
+            val root = snapshot.workspace.root.toAbsolutePath().normalize()
+            return OwnedSourceCapture(
+                policy = SourceCapturePolicy(), extensions = emptyMap(), ignoredDirectories = snapshot.ignoredDirectories,
+                caseSensitiveExtensions = true, allowMissingRoot = false, ignoreRootDirectory = false,
+                requireRegularEntries = true,
+            ).capture(root).regularPaths.mapTo(linkedSetOf(), root::relativize)
+        }
+
         /** Bounded opaque UTF-8 input acquisition; unavailable is an explicit typed failure, never absence. */
         fun readWorkspaceTextInput(root: Path, relative: Path, maxBytes: Int): OwnedWorkspaceTextReadout {
             require(maxBytes in 1..MAX_WORKSPACE_INPUT_BYTES)
@@ -91,6 +101,7 @@ private class OwnedSourceCapture(
     private val selectedRoots: List<Path>? = null,
     private val selectedInput: Path? = null,
     private val inputByteBound: Int? = null,
+    private val requireRegularEntries: Boolean = false,
 ) {
     private var entries = 0
     private var totalBytes = 0
@@ -245,7 +256,7 @@ private class OwnedSourceCapture(
                         sources.add(SourceFile(rel, read(directory, name, attrs, display), language))
                     }
                 }
-                languageId(name) != null -> unavailable(OwnedSourceCaptureFailure.OWNERSHIP_UNAVAILABLE, display)
+                requireRegularEntries || languageId(name) != null -> unavailable(OwnedSourceCaptureFailure.OWNERSHIP_UNAVAILABLE, display)
             }
         }
         if (!sameIdentity(before, attributes(directory))) unavailable(OwnedSourceCaptureFailure.INPUT_CHANGED, root.resolve(relative))

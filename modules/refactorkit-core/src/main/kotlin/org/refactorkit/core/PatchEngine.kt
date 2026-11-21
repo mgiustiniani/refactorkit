@@ -1625,6 +1625,9 @@ class PatchEngine(
             )))
         }
 
+        if (plan.authorityLease?.requiresExactWorkspaceInventory == true) {
+            validateTrackedWorkspaceInventory(snapshot)?.let { return ApplyResult.Refused(listOf(it)) }
+        }
         try {
             transactionLog.prepare(record)
             transactionLog.update(record.copy(state = JournalState.APPLYING))
@@ -1661,6 +1664,31 @@ class PatchEngine(
                 },
             )))
         }
+    }
+
+    private fun validateTrackedWorkspaceInventory(snapshot: ProjectSnapshot): Diagnostic? {
+        val observed = try {
+            OwnedSourceInventoryReader.captureWorkspaceFilePaths(snapshot)
+        } catch (failure: OwnedSourceCaptureException) {
+            return Diagnostic(
+                "Workspace file inventory cannot be verified before Apply: ${failure.code.name}",
+                Diagnostic.Severity.ERROR,
+                code = "snapshot.workspaceInventoryUnavailable",
+            )
+        }
+        val expected = snapshot.trackedFiles.mapTo(hashSetOf()) { it.path.normalize() }
+        if (observed == expected) return null
+        val added = observed - expected
+        val missing = expected - observed
+        return Diagnostic(
+            "Workspace file inventory changed since preview (${added.size} added, ${missing.size} missing); rescan and regenerate the plan",
+            Diagnostic.Severity.ERROR,
+            code = "snapshot.workspaceInventoryChanged",
+            details = DiagnosticDetails(buildMap {
+                added.minByOrNull(ProtocolPath::serialize)?.let { put("firstAddedPath", ProtocolPath.serialize(it)) }
+                missing.minByOrNull(ProtocolPath::serialize)?.let { put("firstMissingPath", ProtocolPath.serialize(it)) }
+            }),
+        )
     }
 
     private fun prepareJournalRecord(

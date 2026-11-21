@@ -16,6 +16,8 @@ import org.refactorkit.core.ApplyAuthorization
 import org.refactorkit.core.ApplyResult
 import org.refactorkit.core.DiagnosticsGate
 import org.refactorkit.core.PatchEngine
+import org.refactorkit.core.PatchFaultInjector
+import org.refactorkit.core.PatchFaultPoint
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
@@ -40,6 +42,7 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
 import kotlin.io.path.writeText
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -101,6 +104,12 @@ class KotlinJvmSafeDeleteCharacterizationSteps {
     private var safeDeleteManagedSnapshotHash: String? = null
     private var safeDeleteManagedProjectImage: Map<Path, String>? = null
     private var safeDeleteManagedTransactionId: String? = null
+    private var inventoryApply: InventoryApplyObservation? = null
+
+    private data class InventoryApplyObservation(
+        val result: ApplyResult,
+        val imageAfterIntroduction: Map<Path, String>,
+    )
 
     private val adapter = JavaLanguageAdapter()
     private val planner = JavaSafeDeletePlanner(adapter)
@@ -209,6 +218,51 @@ class KotlinJvmSafeDeleteCharacterizationSteps {
         assertEquals(listOf("available"), scanned.buildModels.map { it.status.name.lowercase() })
         assertEquals(2, scanned.modules.size, "both Java-bearing Maven modules must be in the snapshot")
         assertEquals("0", scanned.buildModels.single().attributes["java.safeDelete.textReferenceScan.binaryInputs"])
+    }
+
+    @When("^an input appears \"([^\"]+)\" while applying the previewed Maven closure$")
+    fun applyMavenClosureAfterNewInput(phase: String) {
+        val root = requireNotNull(fixtureRoot)
+        val current = requireNotNull(snapshot)
+        val preview = planner.preview(current, requireNotNull(symbolFqn))
+        assertEquals(PatchStatus.PREVIEW, preview.status)
+        assertEquals("maven-reactor-complete", preview.authorityLease?.attributes?.get(JavaSafeDeletePlanner.REFERENCE_CLOSURE_ATTRIBUTE))
+
+        val relative = "app/src/main/resources/META-INF/orm.xml"
+        var expectedImage: Map<Path, String>? = null
+        fun introduceResource() {
+            if (expectedImage != null) return
+            if (phase == "as a link before lease validation") {
+                val path = root.resolve(relative)
+                path.parent.createDirectories()
+                Files.createSymbolicLink(path, root.resolve("pom.xml"))
+            } else {
+                write(root, relative, "<opaque>fixtures.orbit.Orphan</opaque>\n")
+            }
+            expectedImage = projectImage(root)
+        }
+
+        val injector = PatchFaultInjector { point, _, _ ->
+            if (point == PatchFaultPoint.BEFORE_AUTHORITY_LEASE_VALIDATION && phase != "during diagnostics") introduceResource()
+        }
+        val diagnostics = if (phase == "during diagnostics") DiagnosticsGate.enabled("late-maven-input-test") {
+            introduceResource()
+            emptyList()
+        } else DiagnosticsGate.disabled("late-maven-input-test")
+        val result = PatchEngine(root, faultInjector = injector).apply(
+            preview, current, ApplyAuthorization.explicit("late-maven-input-test"), diagnostics,
+        )
+        inventoryApply = InventoryApplyObservation(result, requireNotNull(expectedImage))
+    }
+
+    @Then("^the inventory guard refuses with \"([^\"]+)\" before writing the reactor or its journal$")
+    fun verifyInventoryApplyRefusal(expectedCode: String) {
+        val observation = requireNotNull(inventoryApply)
+        val refused = assertIs<ApplyResult.Refused>(observation.result)
+        assertEquals(listOf(expectedCode), refused.diagnostics.map { it.code }, refused.toString())
+        val root = requireNotNull(fixtureRoot)
+        assertEquals(observation.imageAfterIntroduction, projectImage(root))
+        assertTrue(!root.resolve(".refactorkit/transactions").exists(), "No write-ahead journal may be created")
     }
 
     @Given("^a two-module Maven reactor contains a package-private Java type and an opaque binary resource$")

@@ -11,6 +11,8 @@ import org.refactorkit.core.BuildSourceSet
 import org.refactorkit.core.FileEdit
 import org.refactorkit.core.OperationAuthorityEvidenceCompleteness
 import org.refactorkit.core.OperationAuthorityLease
+import org.refactorkit.core.OwnedSourceCaptureException
+import org.refactorkit.core.OwnedSourceInventoryReader
 import org.refactorkit.core.PatchPlan
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
@@ -195,6 +197,12 @@ class JavaSafeDeletePlanner(private val adapter: JavaLanguageAdapter) {
         if (!hasCompleteMavenSourceClosure(snapshot, declarationFile.path)) return null
         if (snapshot.files.any(::containsDynamicLookupSurface)) return null
         if (hasJavaStringConsumer(snapshot, symbolFqn, declarationFile.path)) return null
+        val capturedPaths = try {
+            OwnedSourceInventoryReader.captureWorkspaceFilePaths(snapshot)
+        } catch (_: OwnedSourceCaptureException) {
+            return null
+        }
+        if (capturedPaths != snapshot.trackedFiles.mapTo(hashSetOf()) { it.path.normalize() }) return null
 
         val model = snapshot.buildModels.singleOrNull { it.providerId == MAVEN_EFFECTIVE_PROVIDER }
             ?: return null
@@ -214,6 +222,7 @@ class JavaSafeDeletePlanner(private val adapter: JavaLanguageAdapter) {
             workspaceEditSha256 = WorkspaceEditIdentity.sha256(edit),
             requiredClasspathEvidence = snapshot.classpathEvidence,
             attributes = mapOf(
+                OperationAuthorityLease.REQUIRE_EXACT_WORKSPACE_INVENTORY to "true",
                 AUTHORITY_KIND_ATTRIBUTE to MANAGED_CLOSURE_AUTHORITY_KIND,
                 REFERENCE_CLOSURE_ATTRIBUTE to MANAGED_REFERENCE_CLOSURE,
                 COMPLETE_PROJECT_ATTRIBUTE to "true",
@@ -484,6 +493,7 @@ object JavaSafeDeleteManagedApplyPolicy {
             lease.operation == plan.operation && lease.snapshotHash == plan.snapshotHash &&
             lease.evidenceCompleteness == OperationAuthorityEvidenceCompleteness.COMPLETE &&
             lease.workspaceEditSha256 == WorkspaceEditIdentity.sha256(plan.workspaceEdit) &&
+            lease.requiresExactWorkspaceInventory &&
             attributes[JavaSafeDeletePlanner.AUTHORITY_KIND_ATTRIBUTE] == JavaSafeDeletePlanner.MANAGED_CLOSURE_AUTHORITY_KIND &&
             attributes[JavaSafeDeletePlanner.REFERENCE_CLOSURE_ATTRIBUTE] == JavaSafeDeletePlanner.MANAGED_REFERENCE_CLOSURE &&
             attributes[JavaSafeDeletePlanner.COMPLETE_PROJECT_ATTRIBUTE] == "true" &&

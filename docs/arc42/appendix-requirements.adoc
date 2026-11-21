@@ -11664,11 +11664,19 @@ resource paths includes the count of any additional uninspected resources.
 The first managed case is actionable in the Java adapter. It needs a complete
 provider-owned Maven workspace, a binding-selected private entity field with
 explicit field access and a declared database column name that stays the same,
-and complete inspection of the query and mapping inputs. The write boundary
-must also re-enumerate relevant inputs under the workspace lock. It currently
-rechecks the bytes of known auxiliary files. The managed path requires proof
-that a newly added opaque input prevents journal creation, as well as
-diagnostics and byte-exact Apply and rollback on a supported project.
+and complete inspection of the query and mapping inputs. Before granting JPQL
+write authority, the planner must bind that inventory and qualify diagnostics,
+Apply and byte-exact rollback on a supported project.
+
+The existing managed Maven `safeDelete` path now binds its owned regular-file
+inventory at preview. The same lease check re-enumerates workspace files under
+lock after diagnostics and before persisting the journal. A new path or a
+missing tracked path invalidates the preview. An unexpected link or unreadable
+inventory prevents Apply. The managed-closure Story verifies newly introduced
+resources before lease validation and during diagnostics, plus a new symbolic
+link. The normal Maven Apply and rollback remain covered by the existing
+managed safe-delete Story. The JPQL planner can reuse this inventory gate once
+it can prove framework reference closure.
 
 The Maven test-JVM gap extends the existing M2 requirement
 `REQ-JAVA-PROJECT-CONTEXT-001`. The bounded `project.context.v7` increment
