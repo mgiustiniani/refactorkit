@@ -153,6 +153,7 @@ import kotlin.test.assertTrue
 @SelectClasspathResource("c-toolchain-runtime-discovery.feature")
 @SelectClasspathResource("c-warm-configuration-invalidation.feature")
 @SelectClasspathResource("interim-host-support-reconciliation.feature")
+@SelectClasspathResource("java-package-migration-provider.feature")
 @ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.cli.previewcommand")
 @ConfigurationParameter(
     key = PLUGIN_PROPERTY_NAME,

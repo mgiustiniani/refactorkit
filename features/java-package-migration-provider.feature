@@ -8,3 +8,10 @@ Feature: Direct Java package migration provider
     When I exercise typed movePackage preview, stale-plan refusal, fresh apply, and rollback through the daemon
     Then the direct provider returns a read-only preview with staged diagnostics and moves only exact-package non-generated units
     And operation discovery agrees with the stable Java movePackage route and does not expose arbitrary recipe execution
+
+  @REQ-JAVA-PACKAGE-MIGRATION-003#move-package-preserves-unrelated-java-source-text
+  Scenario: Move package preserves unrelated Java source text
+    Given a Maven workspace has package references and unrelated occurrences of the same text
+    When the daemon previews and applies its package migration
+    Then the Java package move changes the owned code and only exact package or source-path literals
+    And the package migration rollback restores all original paths and bytes

@@ -8881,6 +8881,19 @@ package and runs:
 cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --lib installed_refactorkit_java_navigation_uses_utf16_and_exact_bindings -- --ignored --test-threads=1
 ```
 
+[[java-move-package-source-text-2026-11-21]]
+=== RPK-PKG-003 Move Package text boundaries (2026-11-21)
+
+The IDE reported that moving `pkg` also changed a URL containing
+`pkg.Library`. The Maven/JDK 21 Story reproduced the URL and comment changes
+on the packaged Linux baseline. The corrected planner selects package names,
+imports, Java qualified names and exact authorized string tokens by their
+parsed ranges. The selected Story passes preview, Apply and exact rollback.
+Seven existing package/recipe cases pass, including cross-module references,
+generated-source exclusion and exact source-path literals. The evidence is
+under `.refactorkit/runs/v080-ide-java-move-package-text-boundary-20261121-r001/`.
+See link:../requirements/java-package-migration.md#rpk-pkg-003-text-boundaries[the existing package-migration requirement].
+
 [[JavaSavedCursorSelectionDelivery]]
 === Exact saved cursor mutation authority
 

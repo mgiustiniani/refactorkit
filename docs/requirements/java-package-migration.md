@@ -148,6 +148,23 @@ This addendum authorizes only the bounded direct provider route described above;
 generic recipe composition remains excluded. The provider has qualified locally;
 the IDE surface still requires independent consumer qualification.
 
+### RPK-PKG-003 text boundaries
+
+The scenario
+`REQ-JAVA-PACKAGE-MIGRATION-003#move-package-preserves-unrelated-java-source-text`
+exercises an SDK-bound Maven package move through the daemon on JDK 21. Package
+declarations, imports and qualified Java references are selected from parsed
+source ranges. The literal exceptions are whole ordinary string tokens that
+exactly match the old package or the source path of a moved Java unit.
+
+The regression checks that a URL containing the old qualified name, exact
+class-name strings, prose containing a source path, comments, text blocks, and
+CRLF line endings survive Preview and Apply. Rollback uses the original
+`javaContext` and the committed snapshot and restores every input byte and path.
+An embedded comment that interrupts the affected package name yields the typed
+refusal `java.movePackage.commentedPackageName`.
+[ARC42 acceptance](../arc42/appendix-requirements.adoc#java-move-package-source-text-2026-11-21).
+
 ## Focused fixture
 
 Tests shall use a self-contained multi-module Maven reactor representing:

@@ -6,12 +6,26 @@ import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.RefactoringEvidence
 import org.refactorkit.core.RiskLevel
-import org.refactorkit.core.SourcePosition
+import org.refactorkit.core.SourceFile
 import org.refactorkit.core.SourceRange
 import org.refactorkit.core.Symbol
 import org.refactorkit.core.TextEdit
 import org.refactorkit.core.TextEdits
 import org.refactorkit.core.WorkspaceEdit
+import org.refactorkit.core.owningBuildSourceRoots
+import org.eclipse.jdt.core.JavaCore
+import org.eclipse.jdt.core.dom.AST
+import org.eclipse.jdt.core.dom.ASTNode
+import org.eclipse.jdt.core.dom.ASTParser
+import org.eclipse.jdt.core.dom.ASTVisitor
+import org.eclipse.jdt.core.dom.AbstractTypeDeclaration
+import org.eclipse.jdt.core.dom.Comment
+import org.eclipse.jdt.core.dom.CompilationUnit
+import org.eclipse.jdt.core.dom.ImportDeclaration
+import org.eclipse.jdt.core.dom.Javadoc
+import org.eclipse.jdt.core.dom.PackageDeclaration
+import org.eclipse.jdt.core.dom.QualifiedName
+import org.eclipse.jdt.core.dom.StringLiteral
 import java.nio.file.Path
 
 /** Typed request for the bounded exact-package Java migration. */
@@ -34,11 +48,21 @@ class JavaMovePackagePlanner(
             return refused(snapshot, "Source and target packages are identical.")
         }
 
-        val packageDeclaration = Regex("(?m)^\\s*package\\s+${Regex.escape(fromPackage)}\\s*;")
-        val movedFiles = snapshot.files.filter { file ->
-            file.languageId == "java" && packageDeclaration.containsMatchIn(file.content) &&
-                JavaGeneratedSourcePolicy.reason(file) == null
+        val javaFiles = snapshot.files.filter {
+            it.languageId == "java" && JavaGeneratedSourcePolicy.reason(it) == null
         }.sortedBy { it.path.toString() }
+        val units = linkedMapOf<SourceFile, CompilationUnit>()
+        for (file in javaFiles) {
+            val attributes = snapshot.owningBuildSourceRoots(file.path).singleOrNull()?.sourceSet?.attributes
+            val sourceLevel = when (val decision = JavaProjectSourceLevelPolicy.resolve(
+                attributes?.get("java.release"), attributes?.get("java.sourceLevel"),
+            )) {
+                is JavaProjectSourceLevelDecision.Supported -> decision.sourceLevel
+                is JavaProjectSourceLevelDecision.Refused -> return refused(snapshot, decision.message, decision.code)
+            }
+            units[file] = parse(file, sourceLevel)
+        }
+        val movedFiles = javaFiles.filter { units.getValue(it).`package`?.name?.fullyQualifiedName == fromPackage }
         if (movedFiles.isEmpty()) {
             return PatchPlan(
                 operation = OPERATION,
@@ -72,31 +96,28 @@ class JavaMovePackagePlanner(
             }
             .groupingBy { it.kind.name.lowercase() }
             .eachCount()
-        val declaredTypes = movedFiles.flatMap(::topLevelTypeNames).toSortedSet()
-        val qualifiedNames = declaredTypes.map { "$fromPackage.$it" to "$toPackage.$it" }
-        val sourcePathReferences = targetBySource.mapNotNull { (source, target) ->
+        val declaredTypes = movedFiles.flatMap { file ->
+            units.getValue(file).types().filterIsInstance<AbstractTypeDeclaration>().map { it.name.identifier }
+        }.toSet()
+        val sourcePathLiterals = targetBySource.mapNotNull { (source, target) ->
             val oldPath = source.toString().replace('\\', '/')
             val newPath = target.toString().replace('\\', '/')
-            val marker = Regex("(?:^|/)src/(?:main|test)/java/").find(oldPath) ?: return@mapNotNull null
+            val marker = SOURCE_ROOT.find(oldPath) ?: return@mapNotNull null
             val offset = marker.range.first + if (oldPath[marker.range.first] == '/') 1 else 0
-            oldPath.substring(offset) to newPath.substring(offset)
-        }
-        val wildcardImport = Regex("(?m)^(\\s*import\\s+(?:static\\s+)?)${Regex.escape(fromPackage)}\\.(\\*\\s*;)")
+            quoted(oldPath.substring(offset)) to quoted(newPath.substring(offset))
+        }.toMap()
+        val literalReplacements = sourcePathLiterals + (quoted(fromPackage) to quoted(toPackage))
         val modifications = mutableListOf<FileEdit>()
-        for (file in snapshot.files.sortedBy { it.path.toString() }) {
-            if (file.languageId != "java" || JavaGeneratedSourcePolicy.reason(file) != null) continue
-            var after = file.content
-            if (file.path.normalize() in movingSources) after = packageDeclaration.replaceFirst(after, "package $toPackage;")
-            qualifiedNames.forEach { (oldName, newName) ->
-                after = after.replace(
-                    Regex("(?<![A-Za-z0-9_$])${Regex.escape(oldName)}(?![A-Za-z0-9_$])"),
-                    newName,
+        for ((file, unit) in units) {
+            val edits = try {
+                collectEdits(file, unit, request, declaredTypes, literalReplacements)
+            } catch (_: CommentedPackageName) {
+                return refused(
+                    snapshot, "A comment interrupts an affected Java package name in ${file.path}.",
+                    "java.movePackage.commentedPackageName",
                 )
             }
-            sourcePathReferences.forEach { (oldPath, newPath) -> after = after.replace(oldPath, newPath) }
-            after = after.replace("\"$fromPackage\"", "\"$toPackage\"")
-            after = wildcardImport.replace(after, "$1$toPackage.$2")
-            fullFileReplacement(file.path.normalize(), file.content, after)?.let(modifications::add)
+            if (edits.isNotEmpty()) modifications += FileEdit.Modify(file.path.normalize(), edits)
         }
         val renames = targetBySource.entries.sortedBy { it.key.toString() }
             .map { (source, target) -> FileEdit.Rename(source, target) }
@@ -112,7 +133,7 @@ class JavaMovePackagePlanner(
             affectedFiles = workspaceEdit.affectedFiles(),
             workspaceEdit = workspaceEdit,
             warnings = listOf(
-                "Java compilation units, imports, fully qualified references, exact package-name literals, and exact moved-unit source-path literals are in scope; other strings and build metadata are not migrated.",
+                "The migration updates Java declarations, imports, qualified references, and exact package-name or moved-source-path string literals. It preserves comments, other literals, and build metadata.",
                 "Generated sources and build outputs are excluded from mutation planning.",
             ),
             riskLevel = RiskLevel.MEDIUM,
@@ -120,13 +141,14 @@ class JavaMovePackagePlanner(
         )
     }
 
-    private fun refused(snapshot: ProjectSnapshot, reason: String) = PatchPlan(
+    private fun refused(snapshot: ProjectSnapshot, reason: String, code: String? = null) = PatchPlan(
         operation = OPERATION,
         status = PatchStatus.REFUSED,
         snapshotHash = snapshot.hash,
         confidence = 0.0,
         requiresUserApproval = false,
         summary = reason,
+        refusalCode = code,
         affectedFiles = emptySet(),
         workspaceEdit = WorkspaceEdit(),
         evidence = RefactoringEvidence.STRUCTURAL,
@@ -150,23 +172,79 @@ class JavaMovePackagePlanner(
         return target.resolve(path.fileName).normalize()
     }
 
-    private fun topLevelTypeNames(file: org.refactorkit.core.SourceFile): List<String> =
-        Regex("(?m)^(?:\\s*(?:public|protected|private|abstract|final|sealed|non-sealed|static|strictfp)\\s+)*" +
-            "(?:class|interface|enum|record|@interface)\\s+([A-Za-z_$][A-Za-z0-9_$]*)")
-            .findAll(file.content)
-            .map { it.groupValues[1] }
-            .toList()
+    private fun parse(file: SourceFile, sourceLevel: Int): CompilationUnit {
+        val compliance = if (sourceLevel == 8) JavaCore.VERSION_1_8 else sourceLevel.toString()
+        return ASTParser.newParser(AST.getJLSLatest()).apply {
+            setKind(ASTParser.K_COMPILATION_UNIT)
+            setSource(file.content.toCharArray())
+            setCompilerOptions(JavaCore.getOptions().also { JavaCore.setComplianceOptions(compliance, it) })
+        }.createAST(null) as CompilationUnit
+    }
 
-    private fun fullFileReplacement(path: Path, before: String, after: String): FileEdit.Modify? =
-        if (before == after) null else FileEdit.Modify(
-            path,
-            listOf(TextEdit(
-                SourceRange(SourcePosition(0, 0), TextEdits.positionForOffset(before, before.length)),
-                after,
-            )),
-        )
+    private fun collectEdits(
+        file: SourceFile,
+        unit: CompilationUnit,
+        request: JavaMovePackageRequest,
+        declaredTypes: Set<String>,
+        literalReplacements: Map<String, String>,
+    ): List<TextEdit> {
+        val edits = mutableListOf<TextEdit>()
+        val comments = unit.commentList.orEmpty().filterIsInstance<Comment>()
+        fun replace(node: ASTNode, value: String) {
+            val start = node.startPosition
+            val end = start + node.length
+            if (comments.any { comment ->
+                    comment.startPosition < end && start < comment.startPosition + comment.length
+                }) throw CommentedPackageName()
+            edits += TextEdit(
+                SourceRange(
+                    TextEdits.positionForOffset(file.content, start),
+                    TextEdits.positionForOffset(file.content, end),
+                ),
+                value,
+            )
+        }
+        unit.accept(object : ASTVisitor() {
+            override fun visit(node: PackageDeclaration): Boolean {
+                if (node.name.fullyQualifiedName == request.fromPackage) replace(node.name, request.toPackage)
+                return true
+            }
+
+            override fun visit(node: ImportDeclaration): Boolean {
+                if (!node.isStatic && node.isOnDemand && node.name.fullyQualifiedName == request.fromPackage) {
+                    replace(node.name, request.toPackage)
+                    return false
+                }
+                return true
+            }
+
+            override fun visit(node: QualifiedName): Boolean {
+                val outer = generateSequence(node as ASTNode) { it.parent as? QualifiedName }.last()
+                if (outer.parent is PackageDeclaration) return false
+                if (node.qualifier.fullyQualifiedName == request.fromPackage && node.name.identifier in declaredTypes) {
+                    replace(node.qualifier, request.toPackage)
+                    return false
+                }
+                return true
+            }
+
+            override fun visit(node: StringLiteral): Boolean {
+                val spelling = file.content.substring(node.startPosition, node.startPosition + node.length)
+                literalReplacements[spelling]?.let { replace(node, it) }
+                return false
+            }
+
+            override fun visit(node: Javadoc): Boolean = false
+        })
+        return edits
+    }
+
+    private fun quoted(value: String): String = "\"$value\""
+
+    private class CommentedPackageName : RuntimeException()
 
     companion object {
         const val OPERATION = "movePackage"
+        private val SOURCE_ROOT = Regex("(?:^|/)src/(?:main|test)/java/")
     }
 }
