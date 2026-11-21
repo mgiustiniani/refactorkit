@@ -9570,8 +9570,12 @@ checks evaluation through managed Apply and byte-exact rollback. The Linux ZIP
 from `074069f9` passes the native daemon path using Java context v7 with Temurin
 8u512, offline Maven verification and the same runtime result before Apply,
 after Apply and after rollback. The receipt and archive evidence are under
-`.refactorkit/runs/v080-ide-java-parameter-object-20261121-r001/`. Desktop IDE
-acceptance on X11 and Wayland is `actionable` with that ZIP.
+`.refactorkit/runs/v080-ide-java-parameter-object-20261121-r001/`. The consuming
+AppImage `9e8da93d` passes one native scenario and eight steps on X11
+(`run-N18WNf`) and KWin Wayland (`run-eJL2CY`) using the same 225 runtime files.
+The saved method selector, review, Apply, offline Maven test for
+`answer(2, 7) == 27`, and exact rollback all pass. Both runs exit with zero
+surviving processes.
 
 === Java extractVariable bounded operation — 2026-10-24
 
