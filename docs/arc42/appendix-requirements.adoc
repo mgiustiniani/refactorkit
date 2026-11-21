@@ -7749,6 +7749,15 @@ interaction between generated outputs and rollback eligibility, with no cause
 attributed. It does not qualify source-set classification or synchronized Failsafe
 execution.
 
+The 2026-11-21 AppImage replay under the same Maven rename requirement covers
+JDT LS-created empty `target/classes` and `target/test-classes` on both sides of
+the rename. Preview and Apply keep the original directory hierarchy. Normal
+rollback removes the newly created destination's empty conventional outputs
+after checking the saved transaction images and directory identity under the
+workspace lock. Compiled classes, symbolic links and unrelated paths still
+cause a rollback conflict. X11 and KWin Wayland each completed the offline
+Maven 3.9.11 build on JDK 21 and restored the original bytes and paths.
+
 The fresh receipt binds the checked-in-reactor scenario and its two examples. Its
 pre-edit analyzer inventory found three exact step reuses, one new Given, one runner,
 and no ambiguity or duplicate expressions. The selected Cucumber run passes both cases
@@ -8691,6 +8700,16 @@ clients that use the original settings-only discovery contract. Clients that
 recognize the extension use the two new flags to interpret inbound support.
 The legacy composite Story still has missing effective glue (`actionable`).
 The CLI command `java.rename-module` remains Maven-specific.
+
+The 2026-11-21 AppImage replay exposed an `actionable` extension under
+`REQ-JAVA-GRADLE-MODULE-RENAME-001`. The selected Groovy
+`implementation project(':library')` is literal, but its reactor combines the
+built-in application plugin, external JUnit coordinates and additional literal
+project dependencies. The current bounded script check refuses the preview.
+Extend the managed preview to identify the selected declaration in this
+ordinary declarative consumer and preserve the other dependencies, then prove
+offline build and exact rollback from the IDE. Keep typed refusals for dynamic
+or ambiguous declarations and unqualified external consumers.
 
 This route does not implement physical Gradle module relocation or any mixed
 Maven/Gradle ownership transform. Gradle dependency and source-set transforms and
