@@ -181,3 +181,17 @@ Ability: Rename an owner-bound Java field with exact JDT binding evidence, fall 
     When the caller requests a renameMember preview for that owner-bound field with a valid new field name
     Then the preview identifies the uninspected JPQL resource "src/main/resources/META-INF/orm.xml"
     And daemon Apply reports the typed incomplete-reference refusal without a transaction
+
+  @REQ-JAVA-RENAME-FIELD-CHAR-001 @functional-requirement @REQ-JAVA-RENAME-FIELD-CHAR-001#closed-jpql-field-rename-applies-and-rolls-back
+  Scenario Outline: Closed JPQL field rename applies and rolls back
+    Given a Maven JPQL field-rename fixture with "<inputs>"
+    When the IDE previews the saved entity field rename with Maven SDK authority
+    Then the JPQL field rename has "<result>" with exact query edits and no unowned writes
+
+    Examples:
+      | inputs                  | result      |
+      | explicit field mapping  | managed     |
+      | implicit column mapping | review-only |
+      | external query resource | review-only |
+      | derived query method    | review-only |
+      | computed query value    | review-only |

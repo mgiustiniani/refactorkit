@@ -265,10 +265,21 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
                     .sortedWith(compareBy({ it.range.start.line }, { it.range.start.character })),
             )
         }
+        val workspaceEdit = WorkspaceEdit(edits)
+        val managedFramework = frameworkReferenceEvidence?.let { framework ->
+            JavaManagedJpqlRename.prove(
+                snapshot, candidate.path, ownerFqn, oldMemberName, newMemberName, workspaceEdit, framework.referenceAnalysis,
+            )
+        }
+        val referenceAnalysis = managedFramework?.references ?: frameworkReferenceEvidence?.referenceAnalysis
         val warnings = buildList {
             add("JDT binding selected exact field $ownerFqn#$oldMemberName; edits were generated from JDT declaration/reference ranges.")
-            add("Reflection, serialization names, framework strings, and annotation-processor output are NOT updated. Review manually.")
-            frameworkReferenceEvidence?.referenceAnalysis?.warnings?.let(::addAll)
+            if (managedFramework != null) {
+                add("Review consumers outside the captured Maven workspace before applying this field rename.")
+            } else {
+                add("Reflection, serialization names, framework strings, and annotation-processor output are NOT updated. Review manually.")
+            }
+            referenceAnalysis?.warnings?.let(::addAll)
         }
         return PatchPlan(
             operation = "renameMember",
@@ -278,12 +289,13 @@ class JavaRenameMemberPlanner(private val adapter: JavaLanguageAdapter) {
             requiresUserApproval = true,
             summary = "Rename field '$oldMemberName' → '$newMemberName' in $ownerFqn using JDT binding evidence. ${editsByPath.size} file(s) affected.",
             affectedFiles = editsByPath.keys,
-            workspaceEdit = WorkspaceEdit(edits),
+            workspaceEdit = workspaceEdit,
             warnings = warnings,
             riskLevel = if (frameworkReferenceEvidence == null) RiskLevel.LOW else RiskLevel.HIGH,
             evidence = RefactoringEvidence.JDT_BINDING,
-            referenceAnalysis = frameworkReferenceEvidence?.referenceAnalysis,
-            managedWriteEligible = frameworkReferenceEvidence == null,
+            referenceAnalysis = referenceAnalysis,
+            managedWriteEligible = frameworkReferenceEvidence == null || managedFramework != null,
+            authorityLease = managedFramework?.lease,
         )
     }
 

@@ -11663,12 +11663,25 @@ resource paths includes the count of any additional uninspected resources.
 The daemon projects this refusal as JSON-RPC plan validation error `-32008`
 with `data.refusalCode` set to `referenceAnalysis.incomplete`.
 
-The first managed case is actionable in the Java adapter. It needs a complete
-provider-owned Maven workspace, a binding-selected private entity field with
-explicit field access and a declared database column name that stays the same,
-and complete inspection of the query and mapping inputs. Before granting JPQL
-write authority, the planner must bind that inventory and qualify diagnostics,
-Apply and byte-exact rollback on a supported project.
+The managed path under `REQ-JAVA-RENAME-FIELD-CHAR-001` covers a single
+provider-owned Maven module with explicit compiler and processor settings,
+an SDK-bound Jakarta Persistence entity and its Spring Data JPA repositories.
+It supports a private `String` field under `@Access(FIELD)` with an explicit
+column name, a default entity name, and direct static scalar JPQL selections
+with an optional `is null` or `is not null` check on the selected property.
+The planner binds the entity, field and queries before and after staging,
+checks the unchanged column name and requires exact workspace membership at
+Apply. Opaque resources, implicit target-column mappings, derived methods
+and computed query values keep the captured references in review-only mode.
+The verifier reads the selected Maven model without running build plugins.
+
+The managed Story passes Apply and byte-exact rollback and the four
+review-only controls. A separate replay with the packaged daemon, official
+Jakarta Persistence and Spring Data APIs, Hibernate and H2 executes the
+original, renamed and restored query against `display_name`. Each phase
+returns the same row and excludes the null row. Broader JPQL grammar, entity
+inheritance, generated sources and additional consumers remain outside this
+managed authority.
 
 The existing managed Maven `safeDelete` path now binds its owned regular-file
 inventory at preview. The same lease check re-enumerates workspace files under
@@ -11677,8 +11690,8 @@ missing tracked path invalidates the preview. An unexpected link or unreadable
 inventory prevents Apply. The managed-closure Story verifies newly introduced
 resources before lease validation and during diagnostics, plus a new symbolic
 link. The normal Maven Apply and rollback remain covered by the existing
-managed safe-delete Story. The JPQL planner can reuse this inventory gate once
-it can prove framework reference closure.
+managed safe-delete Story. The verified JPQL path binds the same inventory
+condition in its operation lease.
 
 The Maven test-JVM gap extends the existing M2 requirement
 `REQ-JAVA-PROJECT-CONTEXT-001`. The bounded `project.context.v7` increment
