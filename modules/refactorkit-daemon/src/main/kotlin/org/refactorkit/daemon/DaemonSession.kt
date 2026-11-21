@@ -318,6 +318,9 @@ class DaemonSession(
                             put("stability", capability.stability.name.lowercase().replace('_', '-'))
                             put("mutationAuthority", capability.mutationAuthority.name.lowercase().replace('_', '-'))
                             put("evidence", capability.evidence.name.lowercase().replace('_', '-'))
+                            if (capability.operation == "changeSignature.addParameter") {
+                                put("features", buildJsonObject { put("thisMethodReferenceMigration", true) })
+                            }
                             if (capability.operation == "moveClass") {
                                 put("targetModuleSelection", buildJsonObject {
                                     put("schemaVersion", "java-move-class-target-module-v1")

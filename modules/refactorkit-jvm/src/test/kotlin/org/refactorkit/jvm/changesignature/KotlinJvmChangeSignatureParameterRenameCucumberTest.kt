@@ -54,6 +54,7 @@ import org.junit.platform.suite.api.Suite
 @Suite
 @IncludeEngines("cucumber")
 @SelectClasspathResource("kotlin-jvm-change-signature-parameter-rename.feature")
+@SelectClasspathResource("java-add-parameter-this-method-reference.feature")
 @ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "org.refactorkit.jvm.changesignature")
 @ConfigurationParameter(
     key = PLUGIN_PROPERTY_NAME,

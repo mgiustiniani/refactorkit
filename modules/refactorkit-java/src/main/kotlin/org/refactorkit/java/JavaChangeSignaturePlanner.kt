@@ -253,16 +253,25 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         if (selection.invocations.any { it.argumentRanges.size != selection.parameters.size }) {
             return refused(snapshot, operation, "JDT invocation argument count is incomplete for ${selection.method.qualifiedName}")
         }
-        val functionalReferences = selection.analysis.methodReferences.filter {
-            it.methodQualifiedName == selection.method.qualifiedName
-        }
+        val functionalReferences = selection.analysis.methodReferences.filter { it.methodBindingKey == selection.method.bindingKey }
+        val migratesThis = functionalReferences.any { it.kind == JdtJavaSemanticMethodReferenceKind.PRIVATE_THIS_METHOD }
         if (migrateFunctionalReferences) {
             val methodName = selection.method.qualifiedName.substringAfter('#').substringBefore('(')
             val scoped = scopedFiles(snapshot, selection.method.qualifiedName.substringBefore('#'), methodName, selection.file.path)
             val lexicalReference = if (selection.method.constructor) scoped.any { it.content.contains("::new") }
                 else firstMethodReference(scoped, methodName) != null
-            if (lexicalReference && functionalReferences.isEmpty()) {
-                return refused(snapshot, operation, "Functional reference shape is not a supported static-method or constructor JDT binding")
+            val migratedSites = functionalReferences.mapTo(mutableSetOf()) { it.path to it.sourceRange }
+            val unsupportedUse = selection.analysis.methodReferenceUses.any {
+                it.methodBindingKey == selection.method.bindingKey && (it.path to it.sourceRange) !in migratedSites
+            }
+            if (unsupportedUse || (lexicalReference && functionalReferences.isEmpty())) {
+                return refused(snapshot, operation,
+                    "Every reference to the selected method requires a supported JDT binding for migration.",
+                    FUNCTIONAL_REFERENCE_UNSUPPORTED)
+            }
+            if (migratesThis && selection.analysis.warnings.any { it.path == selection.file.path }) {
+                return refused(snapshot, operation, "The declaring source requires complete JDT bindings before reference migration.",
+                    FUNCTIONAL_REFERENCE_UNSUPPORTED)
             }
         } else if (functionalReferences.isNotEmpty()) {
             return refused(snapshot, operation, "Functional references require migrateFunctionalReferences=true")
@@ -294,6 +303,14 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
             val target = when (reference.kind) {
                 JdtJavaSemanticMethodReferenceKind.STATIC_METHOD -> "$qualifier.${selection.symbol.simpleName}($invocationArguments)"
                 JdtJavaSemanticMethodReferenceKind.CONSTRUCTOR -> "new $qualifier($invocationArguments)"
+                JdtJavaSemanticMethodReferenceKind.PRIVATE_THIS_METHOD -> {
+                    val name = selection.symbol.simpleName
+                    if (!text.matches(Regex("this\\s*::\\s*${Regex.escape(name)}"))) {
+                        return refused(snapshot, operation, "The this reference requires a plain receiver and method name.",
+                            FUNCTIONAL_REFERENCE_UNSUPPORTED)
+                    }
+                    "this.$name($invocationArguments)"
+                }
             }
             editsByPath.getOrPut(source.path) { mutableListOf() } += TextEdit(
                 reference.sourceRange, "(${arguments.joinToString(", ")}) -> $target",
@@ -311,8 +328,12 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
         val stagedInvocations = staged.invocations.filter { it.methodQualifiedName == stagedMethod.qualifiedName }
         if (stagedInvocations.size != selection.invocations.size + functionalReferences.size ||
             stagedInvocations.any { it.argumentRanges.size != expectedNames.size } ||
-            staged.methodReferences.any { it.methodQualifiedName == stagedMethod.qualifiedName }
+            staged.methodReferenceUses.any { it.methodBindingKey == stagedMethod.bindingKey }
         ) return refused(snapshot, operation, "Staged JDT invocation/reference identity or count changed")
+        if (migratesThis && stagedInvocations.any { it.argumentLiteralFlags.lastOrNull() != true }) {
+            return refused(snapshot, operation, "A bound this reference requires a literal default argument.",
+                FUNCTIONAL_REFERENCE_UNSUPPORTED)
+        }
 
         val affected = fileEdits.map { it.path }.toSet()
         return PatchPlan(
@@ -1683,6 +1704,7 @@ class JavaChangeSignaturePlanner(private val adapter: JavaLanguageAdapter) {
     }
 
     companion object {
+        private const val FUNCTIONAL_REFERENCE_UNSUPPORTED = "java.changeSignature.functionalReferenceUnsupported"
         private val TYPE_KINDS = setOf(Symbol.Kind.CLASS, Symbol.Kind.INTERFACE, Symbol.Kind.ENUM, Symbol.Kind.RECORD, Symbol.Kind.ANNOTATION)
         private val JAVA_KEYWORDS = setOf(
             "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "const",

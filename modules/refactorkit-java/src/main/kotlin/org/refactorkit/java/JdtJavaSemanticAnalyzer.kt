@@ -34,6 +34,7 @@ import org.eclipse.jdt.core.dom.SingleVariableDeclaration
 import org.eclipse.jdt.core.dom.SuperConstructorInvocation
 import org.eclipse.jdt.core.dom.SuperFieldAccess
 import org.eclipse.jdt.core.dom.SuperMethodInvocation
+import org.eclipse.jdt.core.dom.SuperMethodReference
 import org.eclipse.jdt.core.dom.StringLiteral
 import org.eclipse.jdt.core.dom.MethodDeclaration
 import org.eclipse.jdt.core.dom.MethodInvocation
@@ -44,6 +45,7 @@ import org.eclipse.jdt.core.dom.ThisExpression
 import org.eclipse.jdt.core.dom.TypeDeclaration
 import org.eclipse.jdt.core.dom.TypeMethodReference
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment
+import org.eclipse.jdt.core.dom.VariableDeclarationStatement
 import org.eclipse.core.runtime.NullProgressMonitor
 import org.eclipse.core.runtime.OperationCanceledException
 import org.refactorkit.core.BuildModel
@@ -997,9 +999,18 @@ class JdtJavaSemanticAnalyzer {
             override fun visit(node: ExpressionMethodReference): Boolean {
                 val binding = node.resolveMethodBinding()?.methodDeclaration ?: return true
                 methodReferenceUses += semanticMethodReferenceUse(compilationUnit, file, binding, node.startPosition, node.length)
-                if (Modifier.isStatic(binding.modifiers)) methodReferences += semanticMethodReference(
-                    compilationUnit, file, binding, node.startPosition, node.length, JdtJavaSemanticMethodReferenceKind.STATIC_METHOD,
-                )
+                val kind = when {
+                    Modifier.isStatic(binding.modifiers) -> JdtJavaSemanticMethodReferenceKind.STATIC_METHOD
+                    isPrivateThisMethodReference(node, binding) -> JdtJavaSemanticMethodReferenceKind.PRIVATE_THIS_METHOD
+                    else -> return true
+                }
+                methodReferences += semanticMethodReference(compilationUnit, file, binding, node.startPosition, node.length, kind)
+                return true
+            }
+
+            override fun visit(node: SuperMethodReference): Boolean {
+                val binding = node.resolveMethodBinding()?.methodDeclaration ?: return true
+                methodReferenceUses += semanticMethodReferenceUse(compilationUnit, file, binding, node.startPosition, node.length)
                 return true
             }
 
@@ -1330,6 +1341,25 @@ class JdtJavaSemanticAnalyzer {
             current.interfaces.forEach(queue::add)
         }
         return result
+    }
+
+    private fun isPrivateThisMethodReference(node: ExpressionMethodReference, binding: IMethodBinding): Boolean {
+        if (binding.isRecovered || !Modifier.isPrivate(binding.modifiers) || binding.isVarargs || node.typeArguments().isNotEmpty()) {
+            return false
+        }
+        val receiver = node.expression as? ThisExpression ?: return false
+        if (receiver.qualifier != null) return false
+        val receiverType = receiver.resolveTypeBinding()?.typeDeclaration ?: return false
+        val declaringType = binding.declaringClass?.typeDeclaration ?: return false
+        if (receiverType.isRecovered || declaringType.isRecovered || !receiverType.isEqualTo(declaringType)) return false
+
+        // An explicit local target type fixes the SAM independently of overload selection at call sites.
+        val local = node.parent as? VariableDeclarationFragment ?: return false
+        if (local.initializer !== node || local.parent !is VariableDeclarationStatement) return false
+        val targetType = local.resolveBinding()?.type ?: return false
+        val sam = targetType.functionalInterfaceMethod ?: return false
+        return !targetType.isRecovered && !sam.isRecovered && sam.parameterTypes.size == binding.parameterTypes.size &&
+            node.resolveTypeBinding()?.isEqualTo(targetType) == true
     }
 
     private fun semanticMethodReference(
@@ -2031,7 +2061,7 @@ data class JdtJavaSemanticMethodReference(
     val evidence: JdtJavaSemanticEvidence,
 )
 
-enum class JdtJavaSemanticMethodReferenceKind { STATIC_METHOD, CONSTRUCTOR }
+enum class JdtJavaSemanticMethodReferenceKind { STATIC_METHOD, CONSTRUCTOR, PRIVATE_THIS_METHOD }
 
 data class JdtJavaSemanticMethodReferenceUse(
     val methodQualifiedName: String,
