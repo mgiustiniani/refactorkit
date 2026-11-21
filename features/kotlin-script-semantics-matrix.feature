@@ -6,6 +6,7 @@ Feature: Kotlin script semantics fail closed by host context
     Given a standalone Kotlin script declares an explicit @file:DependsOn host dependency
     When the bounded Kotlin/JVM build projection and compiler gate inspect the captured workspace
     Then the inspection reports "kotlin.scriptSemanticsUnsupported" before launching a compiler process
+    And Kotlin semantic admission exposes "kotlin.scriptSemanticsUnsupported" as a structured daemon diagnostic code
     And the script contributes no symbols, references, workspace edits, or managed plans
 
   @REQ-KOTLIN-MATRIX-001#standalone-implicit-receiver-refusal

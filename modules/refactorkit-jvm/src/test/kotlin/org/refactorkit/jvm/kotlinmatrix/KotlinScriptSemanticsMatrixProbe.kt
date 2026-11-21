@@ -1,9 +1,18 @@
 package org.refactorkit.jvm.kotlinmatrix
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import org.refactorkit.core.BuildModel
+import org.refactorkit.core.JsonRpcErrorCodes
+import org.refactorkit.core.JsonRpcException
 import org.refactorkit.core.PatchStatus
 import org.refactorkit.core.ProjectSnapshot
 import org.refactorkit.core.SymbolId
+import org.refactorkit.daemon.DaemonSession
 import org.refactorkit.java.JavaProjectScanner
 import org.refactorkit.jvm.KotlinJvmMoveDeclarationPlanner
 import org.refactorkit.kotlin.KotlinCompilerDiagnostics
@@ -21,6 +30,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -268,6 +278,26 @@ class KotlinScriptSemanticsMatrixProbe {
         assertEquals(null, symbolsResult.attestation.process)
         assertEquals(expectedCode, requireNotNull(plan).refusalCode)
         assertEquals(PatchStatus.REFUSED, requireNotNull(plan).status)
+    }
+
+    fun requireDaemonAdmissionDiagnostic(expectedCode: String) {
+        val root = requireNotNull(workspaceRoot)
+        val toolchain = discoverToolchain(root)
+        val classpath = toolchain.compilerClasspath.filterNot { it == toolchain.compilerJar }
+        DaemonSession().use { daemon ->
+            daemon.dispatch("project.open", buildJsonObject { put("root", root.toString()) })
+            val refusal = assertFailsWith<JsonRpcException> {
+                daemon.dispatch("kotlin.semantic.start", buildJsonObject {
+                    put("jdkHome", toolchain.jdkHome.toString())
+                    put("compilerJar", toolchain.compilerJar.toString())
+                    put("compilerClasspath", JsonArray(classpath.map { JsonPrimitive(it.toString()) }))
+                })
+            }
+            assertEquals(JsonRpcErrorCodes.INVALID_PARAMS, refusal.code)
+            assertTrue(refusal.message.startsWith("$expectedCode:"), refusal.message)
+            val data = assertNotNull(refusal.data, "Kotlin admission must return structured diagnostic codes")
+            assertEquals(JsonArray(listOf(JsonPrimitive(expectedCode))), data.jsonObject.getValue("diagnosticCodes").jsonArray)
+        }
     }
 
     fun requireNoSemanticAuthority() {

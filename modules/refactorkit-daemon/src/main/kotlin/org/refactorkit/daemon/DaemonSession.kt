@@ -3597,6 +3597,9 @@ class DaemonSession(
             JsonRpcErrorCodes.INVALID_PARAMS,
             model.diagnostics.joinToString("; ") { "${it.code}: ${it.message}" }
                 .ifBlank { "kotlin.buildModelUnavailable: Kotlin/JVM build projection is unavailable" },
+            buildJsonObject {
+                put("diagnosticCodes", JsonArray(model.diagnostics.map { JsonPrimitive(it.code) }))
+            },
         )
         val lease = semanticLeaseFactory()
         kotlinToolchain = toolchain

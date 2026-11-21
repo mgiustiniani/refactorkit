@@ -40,6 +40,9 @@ class KotlinScriptSemanticsMatrixSteps(
     fun inspectionReportsTypedRefusalBeforeCompiler(refusalCode: String) =
         probe.requireTypedRefusalBeforeCompiler(refusalCode)
 
+    @And("Kotlin semantic admission exposes {string} as a structured daemon diagnostic code")
+    fun admissionReportsDiagnosticCode(code: String) = probe.requireDaemonAdmissionDiagnostic(code)
+
     @Then("the script contributes no symbols, references, workspace edits, or managed plans")
     fun scriptContributesNoSemanticAuthority() = probe.requireNoSemanticAuthority()
 
