@@ -118,6 +118,8 @@ class JavaMavenModuleRenameSteps {
     private var committedDiagnostics: DiagnosticBaseline? = null
     private var journalAfterApply: TransactionJournalRecord? = null
     private var rollbackResult: ApplyResult? = null
+    private lateinit var outputLayoutBaseline: ExactManifest
+    private lateinit var outputLayoutPlan: PatchPlan
 
     @Before("@REQ-JAVA-MAVEN-MODULE-RENAME-001")
     fun prepareScenario(scenario: Scenario) {
@@ -1353,6 +1355,75 @@ class JavaMavenModuleRenameSteps {
         )
     }
 
+    @Given("the Maven rename source module has {string}")
+    fun prepareOutputLayout(layout: String) {
+        val output = pristineRoot.resolve(OLD_MODULE).resolve("target/classes")
+        when (layout) {
+            "absent" -> Unit
+            "empty" -> {
+                Files.createDirectories(output)
+                Files.createDirectory(output.resolveSibling("test-classes"))
+            }
+            "compiled class" -> {
+                Files.createDirectories(output)
+                val compiledName = javaClass.simpleName + ".class"
+                assertNotNull(javaClass.getResourceAsStream(compiledName)).use {
+                    Files.copy(it, output.resolve(compiledName))
+                }
+            }
+            "symbolic link" -> {
+                Files.createDirectories(output)
+                Files.createSymbolicLink(output.resolve("linked-input"), Path.of("..", "..", "pom.xml"))
+            }
+            "untracked file" -> Files.writeString(pristineRoot.resolve(OLD_MODULE).resolve("notes.bin"), "untracked")
+            else -> fail("Unexpected output layout: $layout")
+        }
+        outputLayoutBaseline = captureExactManifest(pristineRoot, allowLinks = true)
+    }
+
+    @When("I preview the Maven module rename with its existing output layout")
+    fun previewOutputLayout() {
+        s0 = scan(pristineRoot)
+        positivePlanner = JavaRenameMavenModulePlanner()
+        outputLayoutPlan = preview(positivePlanner, s0, OLD_MODULE, NEW_MODULE, NEW_MODULE)
+    }
+
+    @Then("the Maven rename result is {string} and preserves the original workspace")
+    fun assertOutputLayoutResult(outcome: String) {
+        assertEquals(outputLayoutBaseline, captureExactManifest(pristineRoot, allowLinks = true))
+        assertTrue(Files.notExists(pristineRoot.resolve(".refactorkit")))
+        when (outcome) {
+            "source content refused" -> {
+                assertEquals(PatchStatus.REFUSED, outputLayoutPlan.status, outputLayoutPlan.summary)
+                assertEquals("mavenOwnership.sourceUnrecognized", outputLayoutPlan.refusalCode)
+                assertTrue(outputLayoutPlan.workspaceEdit.edits.isEmpty())
+            }
+            "applies and rolls back exactly" -> {
+                assertEquals(PatchStatus.PREVIEW, outputLayoutPlan.status, outputLayoutPlan.summary)
+                val engine = PatchEngine(pristineRoot)
+                val applied = assertIs<ApplyResult.Applied>(engine.apply(
+                    outputLayoutPlan,
+                    s0,
+                    ApplyAuthorization.explicit("direct-library", "acceptance-caller"),
+                    positivePlanner.diagnosticsGate(outputLayoutPlan),
+                ))
+                assertTrue(Files.isRegularFile(pristineRoot.resolve(NEW_MODULE).resolve("pom.xml")))
+                assertTrue(Files.notExists(pristineRoot.resolve(OLD_POM)))
+                assertTrue(Files.notExists(pristineRoot.resolve(NEW_MODULE).resolve("target")))
+                val staged = captureExactManifest(pristineRoot, excludeEngine = true)
+                val retainedDirectory = "$OLD_MODULE/target"
+                assertEquals(
+                    outputLayoutBaseline.entries.filterKeys { it.startsWith(retainedDirectory) },
+                    staged.entries.filterKeys { it.startsWith(retainedDirectory) },
+                )
+                assertIs<ApplyResult.Applied>(engine.rollback(applied.transaction, RollbackMode.NORMAL))
+                assertEquals(outputLayoutBaseline, captureExactManifest(pristineRoot, excludeEngine = true))
+                assertEquals(s0.hash, scan(pristineRoot).hash)
+            }
+            else -> fail("Unexpected rename outcome: $outcome")
+        }
+    }
+
     private fun scan(root: Path): ProjectSnapshot {
         val normalized = root.toAbsolutePath().normalize()
         assertTrue(normalized.startsWith(temporaryRoot.toAbsolutePath().normalize()), "Scanner root escaped disposable scope")
@@ -1959,7 +2030,7 @@ class JavaMavenModuleRenameSteps {
         }
     }
 
-    private fun captureExactManifest(root: Path, excludeEngine: Boolean = false): ExactManifest {
+    private fun captureExactManifest(root: Path, excludeEngine: Boolean = false, allowLinks: Boolean = false): ExactManifest {
         val entries = sortedMapOf<String, ManifestEntry>()
         Files.walkFileTree(
             root,
@@ -1979,6 +2050,11 @@ class JavaMavenModuleRenameSteps {
                 override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
                     val relative = manifestPath(root, file)
                     if (excludeEngine && (relative == ".refactorkit" || relative.startsWith(".refactorkit/"))) {
+                        return FileVisitResult.CONTINUE
+                    }
+                    if (allowLinks && attrs.isSymbolicLink) {
+                        val target = Files.readSymbolicLink(file).toString().toByteArray(Charsets.UTF_8)
+                        entries[relative] = ManifestEntry(PathKind.SYMLINK, target.size.toLong(), sha256(target))
                         return FileVisitResult.CONTINUE
                     }
                     require(!attrs.isSymbolicLink && !Files.isSymbolicLink(file)) { "Symbolic link refused in manifest: $file" }

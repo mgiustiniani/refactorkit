@@ -18,6 +18,7 @@ import org.refactorkit.java.JavaRenameMavenModuleContract.StageFacts
 import org.refactorkit.java.JavaRenameMavenModuleContract.availableMavenModel
 import org.refactorkit.java.JavaRenameMavenModuleContract.hashStrings
 import org.refactorkit.java.JavaRenameMavenModuleContract.javaPlatformHome
+import org.refactorkit.java.JavaRenameMavenModuleContract.pathString
 import org.refactorkit.java.JavaRenameMavenModuleContract.refuse
 import org.refactorkit.java.JavaRenameMavenModuleContract.sha256
 import java.nio.file.Files
@@ -30,6 +31,7 @@ internal object JavaRenameMavenModuleStaging {
         snapshot: ProjectSnapshot,
         simulated: ProjectSnapshot,
         edit: WorkspaceEdit,
+        oldModule: Path,
     ): StageFacts = JavaRenameMavenModuleWorkspace.withWorkspaceCopy(snapshot.workspace.root) { workspace, emptyRepository ->
         val baselineManifest = JavaRenameMavenModuleWorkspace.manifestHash(workspace)
         val rebuiltBaseline = JavaRenameMavenModuleWorkspace.scanOffline(workspace, emptyRepository)
@@ -55,6 +57,17 @@ internal object JavaRenameMavenModuleStaging {
         if (baselineJdt != incomingJdt) {
             refuse(DIAGNOSTICS_REGRESSION, "Copied baseline JDT diagnostics differ from the caller's immutable model")
         }
+
+        // File edits leave empty directories at the old root. Maven still declares
+        // the rebased output paths, but only existing outputs enter its classpaths.
+        val oldModuleRoot = workspace.resolve(oldModule)
+        val retainedEmptyOutputs = availableMavenModel(rebuiltBaseline).modules
+            .single { it.id == pathString(oldModule) }.sourceSets
+            .flatMap { it.outputDirectories }.distinct()
+            .map { workspace.resolve(it).normalize() }
+            .filter { it.startsWith(oldModuleRoot) && Files.isDirectory(it, LinkOption.NOFOLLOW_LINKS) }
+            .filter { directory -> Files.newDirectoryStream(directory).use { !it.iterator().hasNext() } }
+            .map { pathString(workspace.relativize(it)) }
 
         JavaRenameMavenModuleWorkspace.applyInOrder(workspace, edit)
         val stagedManifest = JavaRenameMavenModuleWorkspace.manifestHash(workspace)
@@ -94,6 +107,7 @@ internal object JavaRenameMavenModuleStaging {
             stagedJdtCanonical = JavaRenameMavenModuleEvidence.canonicalDiagnostics(staged, stagedJdt),
             baselineDiagnosticsHash = JavaRenameMavenModuleEvidence.exactDiagnosticsHash(baselineDiagnostics),
             stagedDiagnosticsHash = JavaRenameMavenModuleEvidence.exactDiagnosticsHash(stagedDiagnostics),
+            retainedEmptyOutputs = retainedEmptyOutputs,
         )
     }
 

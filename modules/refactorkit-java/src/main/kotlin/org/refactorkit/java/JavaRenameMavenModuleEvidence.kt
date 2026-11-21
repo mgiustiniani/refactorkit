@@ -113,6 +113,7 @@ internal object JavaRenameMavenModuleEvidence {
         newModule: Path,
         sourceIdentity: ModuleIdentity,
         targetArtifact: String,
+        retainedEmptyOutputs: Set<String>,
         baselineConsumers: List<BuildModule>,
         stagedRootModules: List<String>,
         expectedRootModules: List<String>,
@@ -129,7 +130,12 @@ internal object JavaRenameMavenModuleEvidence {
             val expectedId = if (id == oldName) newName else id
             val after = staged.modules[expectedId]
                 ?: refuse(DESCRIPTOR_UNAVAILABLE, "Staged reactor module is missing: $expectedId")
-            val expected = before.renamed(oldName, newName, if (id == oldName) targetArtifact else before.artifactId)
+            val expected = before.renamed(
+                oldName,
+                newName,
+                if (id == oldName) targetArtifact else before.artifactId,
+                if (id == oldName) retainedEmptyOutputs else emptySet(),
+            )
             if (after != expected) {
                 refuse(DESCRIPTOR_UNAVAILABLE, "Staged reactor facts differ outside the authorized module identity: $expectedId")
             }

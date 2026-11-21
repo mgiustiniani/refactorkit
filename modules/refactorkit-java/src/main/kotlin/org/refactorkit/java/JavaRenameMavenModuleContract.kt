@@ -150,6 +150,7 @@ internal object JavaRenameMavenModuleContract {
         stagedJdtCanonical: List<String>,
         val baselineDiagnosticsHash: String,
         val stagedDiagnosticsHash: String,
+        retainedEmptyOutputs: List<String> = emptyList(),
     ) {
         private val baselineMavenDiagnosticsValue = immutableList(baselineMavenDiagnostics)
         private val stagedMavenDiagnosticsValue = immutableList(stagedMavenDiagnostics)
@@ -157,6 +158,7 @@ internal object JavaRenameMavenModuleContract {
         private val stagedJdtValue = immutableList(stagedJdt)
         private val baselineJdtCanonicalValue = immutableList(baselineJdtCanonical)
         private val stagedJdtCanonicalValue = immutableList(stagedJdtCanonical)
+        private val retainedEmptyOutputsValue = immutableList(retainedEmptyOutputs)
 
         val baselineMavenDiagnostics: List<String> get() = immutableList(baselineMavenDiagnosticsValue)
         val stagedMavenDiagnostics: List<String> get() = immutableList(stagedMavenDiagnosticsValue)
@@ -164,6 +166,7 @@ internal object JavaRenameMavenModuleContract {
         val stagedJdt: List<Diagnostic> get() = immutableList(stagedJdtValue)
         val baselineJdtCanonical: List<String> get() = immutableList(baselineJdtCanonicalValue)
         val stagedJdtCanonical: List<String> get() = immutableList(stagedJdtCanonicalValue)
+        val retainedEmptyOutputs: List<String> get() = immutableList(retainedEmptyOutputsValue)
 
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
@@ -184,7 +187,8 @@ internal object JavaRenameMavenModuleContract {
                 baselineJdtCanonical == other.baselineJdtCanonical &&
                 stagedJdtCanonical == other.stagedJdtCanonical &&
                 baselineDiagnosticsHash == other.baselineDiagnosticsHash &&
-                stagedDiagnosticsHash == other.stagedDiagnosticsHash
+                stagedDiagnosticsHash == other.stagedDiagnosticsHash &&
+                retainedEmptyOutputs == other.retainedEmptyOutputs
         }
 
         override fun hashCode(): Int = valueHash(
@@ -205,6 +209,7 @@ internal object JavaRenameMavenModuleContract {
             stagedJdtCanonical,
             baselineDiagnosticsHash,
             stagedDiagnosticsHash,
+            retainedEmptyOutputs,
         )
 
         override fun toString(): String =
@@ -323,12 +328,17 @@ internal object JavaRenameMavenModuleContract {
             sourceSets: List<SourceSetView> = this.sourceSets,
         ): ModuleView = ModuleView(id, name, root, groupId, artifactId, version, packaging, sourceSets)
 
-        fun renamed(oldModule: String, newModule: String, newArtifact: String): ModuleView = copy(
+        fun renamed(
+            oldModule: String,
+            newModule: String,
+            newArtifact: String,
+            retainedEmptyOutputs: Set<String>,
+        ): ModuleView = copy(
             id = if (id == oldModule) newModule else id,
             name = if (name == oldModule) newModule else name,
             root = renamePath(root, oldModule, newModule),
             artifactId = newArtifact,
-            sourceSets = sourceSets.map { it.renamed(oldModule, newModule) },
+            sourceSets = sourceSets.map { it.renamed(oldModule, newModule, retainedEmptyOutputs) },
         )
 
         override fun equals(other: Any?): Boolean {
@@ -409,12 +419,14 @@ internal object JavaRenameMavenModuleContract {
             attributes,
         )
 
-        fun renamed(oldModule: String, newModule: String): SourceSetView = copy(
+        fun renamed(oldModule: String, newModule: String, retainedEmptyOutputs: Set<String>): SourceSetView = copy(
             sourceRoots = sourceRoots.map { renamePath(it, oldModule, newModule) },
             generatedSourceRoots = generatedSourceRoots.map { renamePath(it, oldModule, newModule) },
             outputDirectories = outputDirectories.map { renamePath(it, oldModule, newModule) },
-            classpathEntries = classpathEntries.map { renamePath(it, oldModule, newModule) },
-            runtimeClasspathEntries = runtimeClasspathEntries.map { renamePath(it, oldModule, newModule) },
+            classpathEntries = classpathEntries.filterNot(retainedEmptyOutputs::contains)
+                .map { renamePath(it, oldModule, newModule) },
+            runtimeClasspathEntries = runtimeClasspathEntries.filterNot(retainedEmptyOutputs::contains)
+                .map { renamePath(it, oldModule, newModule) },
             dependencies = dependencies.map { (target, scope) ->
                 (if (target == oldModule) newModule else target) to scope
             },

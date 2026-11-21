@@ -134,3 +134,17 @@ Business Need: Rename one proven direct-child Maven module without widening writ
       | packaged-runtime, native-host, operating-system, architecture, or cross-platform qualification |
       | disposable real-project acceptance or general Maven project support                        |
       | completion of the broad Java module rename or move roadmap item                             |
+
+  @REQ-JAVA-MAVEN-MODULE-RENAME-001 @REQ-JAVA-MAVEN-MODULE-RENAME-001#rename-preserves-empty-ide-output-directories-and-rejects-untracked-content @functional-requirement
+  Scenario Outline: Rename preserves empty IDE output directories and rejects untracked content
+    Given the Maven rename source module has "<outputs>"
+    When I preview the Maven module rename with its existing output layout
+    Then the Maven rename result is "<outcome>" and preserves the original workspace
+
+    Examples:
+      | outputs             | outcome                         |
+      | absent              | applies and rolls back exactly  |
+      | empty               | applies and rolls back exactly  |
+      | compiled class      | source content refused          |
+      | symbolic link       | source content refused          |
+      | untracked file      | source content refused          |

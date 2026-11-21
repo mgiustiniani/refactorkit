@@ -183,7 +183,7 @@ internal object JavaRenameMavenModulePlanning {
         } catch (failure: Exception) {
             refuse(AMBIGUOUS_ORIGIN, "The ordered Maven module-rename edit cannot be simulated: ${failure.message}")
         }
-        val stage = JavaRenameMavenModuleStaging.stageAndAttest(snapshot, simulated, normalizedEdit)
+        val stage = JavaRenameMavenModuleStaging.stageAndAttest(snapshot, simulated, normalizedEdit, oldDir)
         if (JavaRenameMavenModuleEvidence.trackedInventoryHash(simulated) != stage.stagedTrackedHash) {
             refuse(AMBIGUOUS_ORIGIN, "The immutable simulator image differs from the full staged workspace image")
         }
@@ -194,6 +194,7 @@ internal object JavaRenameMavenModulePlanning {
             newModule = newDir,
             sourceIdentity = sourceIdentity,
             targetArtifact = targetArtifact,
+            retainedEmptyOutputs = stage.retainedEmptyOutputs.toSet(),
             baselineConsumers = effectiveMainConsumers(model, sourceModule.id),
             stagedRootModules = rootDirectModules(rawPom(stage.stagedSnapshot, ROOT_POM)).map(RawValue::text),
             expectedRootModules = directModules.map { value ->
