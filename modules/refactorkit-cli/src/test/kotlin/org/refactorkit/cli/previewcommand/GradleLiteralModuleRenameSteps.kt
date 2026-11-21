@@ -220,7 +220,10 @@ private class NativeGradleLiteralRenameFixture : AutoCloseable {
         """.trimIndent() + "\n"
         if (kotlinDsl) {
             inputs[buildName] = "plugins { base }\n"
-            inputs["peer/$buildName"] = "plugins { id(\"java-library\") }\n"
+            inputs["peer/$buildName"] = """
+                plugins { id("java-library") }
+                java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+            """.trimIndent() + "\n"
             val target = if (form == "application dynamic dependency") "targetPath" else "\":app\""
             val variable = if (form == "application dynamic dependency") "val targetPath = \":app\"\n" else ""
             val hook = if (form == "application dependency hook") "dependencies.add(\"implementation\", project(\":app\"))\n" else ""
