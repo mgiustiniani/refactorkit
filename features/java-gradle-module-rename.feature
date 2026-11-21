@@ -36,3 +36,19 @@ Feature: Rename a Gradle Java project through the managed refactoring route
       | Kotlin | literal dependency | PREVIEW | none                                                                  |
       | Groovy | literal dependency | PREVIEW | none                                                                  |
       | Groovy | dynamic dependency | REFUSED | java.renameGradleModule.inboundProjectDependencyUnsupported            |
+
+  @REQ-JAVA-GRADLE-MODULE-RENAME-001#application-consumers-preserve-unrelated-build-declarations
+  Scenario Outline: Application consumers preserve unrelated build declarations
+    Given a synchronized "<dsl>" Gradle multiproject rename fixture uses "<form>" includes
+    When the daemon previews a literal Gradle app project rename
+    Then the multiproject Gradle rename is "<status>" with "<refusal>"
+    And the Gradle rename preserves peer project identity and supports exact rollback
+
+    Examples:
+      | dsl    | form                           | status  | refusal                                                    |
+      | Groovy | application dependency         | PREVIEW | none                                                       |
+      | Kotlin | application dependency         | PREVIEW | none                                                       |
+      | Groovy | application dynamic dependency | REFUSED | java.renameGradleModule.inboundProjectDependencyUnsupported |
+      | Kotlin | application dynamic dependency | REFUSED | java.renameGradleModule.inboundProjectDependencyUnsupported |
+      | Groovy | application duplicate origin  | REFUSED | java.renameGradleModule.inboundProjectDependencyUnsupported |
+      | Kotlin | application dependency hook   | REFUSED | java.renameGradleModule.inboundProjectDependencyUnsupported |

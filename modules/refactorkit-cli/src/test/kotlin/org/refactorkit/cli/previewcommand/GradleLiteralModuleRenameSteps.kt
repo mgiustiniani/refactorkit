@@ -39,16 +39,20 @@ private class NativeGradleLiteralRenameFixture : AutoCloseable {
     private lateinit var authority: JsonObject
     private var literalConsumerBuild: String? = null
     private var kotlinDsl = false
+    private var application = false
     private var plan: JsonObject? = null
     private var failure: JsonRpcException? = null
 
     fun capture(dsl: String, form: String) {
         require(dsl in setOf("Kotlin", "Groovy") && form in setOf(
             "literal list", "conditional list", "literal dependency", "dynamic dependency",
+            "application dependency", "application dynamic dependency", "application duplicate origin",
+            "application dependency hook",
         ))
         kotlinDsl = dsl == "Kotlin"
+        application = form.startsWith("application ")
         val buildName = if (kotlinDsl) "build.gradle.kts" else "build.gradle"
-        if (form == "literal dependency") literalConsumerBuild = "library/$buildName"
+        if (form in setOf("literal dependency", "application dependency")) literalConsumerBuild = "library/$buildName"
         val dependency = when (form) {
             "literal dependency" -> if (kotlinDsl) """dependencies { implementation(project(":app")) }"""
                 else "dependencies { implementation project(':app') }"
@@ -60,7 +64,9 @@ private class NativeGradleLiteralRenameFixture : AutoCloseable {
         val workspace = Files.createTempDirectory("rk-gradle-literal-rename-"); root = workspace
         home = Files.createTempDirectory("rk-gradle-literal-home-")
         settings = if (kotlinDsl) "settings.gradle.kts" else "settings.gradle"
-        val includes = if (kotlinDsl) "include(\":library\", \":app\")" else "include ':library', ':app'"
+        val modules = listOf("library", "app") + if (application) listOf("peer") else emptyList()
+        val includes = if (kotlinDsl) modules.joinToString(", ", "include(", ")") { "\":$it\"" }
+            else modules.joinToString(", ", "include ") { if (application) "'$it'" else "':$it'" }
         val included = if (form == "conditional list") "if (true) $includes" else includes
         val inputs = linkedMapOf(
             settings to "rootProject.name = \"literal-rename\"\n$included\n",
@@ -76,6 +82,7 @@ private class NativeGradleLiteralRenameFixture : AutoCloseable {
             inputs["$module/$buildName"] = script +
                 if (module == "library" && dependency.isNotEmpty()) "$dependency\n" else ""
         }
+        if (application) addApplicationInputs(inputs, buildName, form)
         inputs.forEach { (path, text) -> write(workspace, path, text) }; originals = inputs
         session = newGradleContextRpcSession()
         val capability = rpc("server.capabilities", buildJsonObject {}).getValue("methods").jsonArray
@@ -152,8 +159,14 @@ private class NativeGradleLiteralRenameFixture : AutoCloseable {
         val mapping = if (kotlinDsl) "project(\":renamed\").projectDir = file(\"app\")\n"
             else "project(':renamed').projectDir = file('app')\n"
         val expected = originals.toMutableMap()
-        expected[settings] = originals.getValue(settings).replace(":app", ":renamed") + mapping
-        literalConsumerBuild?.let { expected[it] = originals.getValue(it).replace(":app", ":renamed") }
+        val settingsBefore = originals.getValue(settings)
+        val includeEdit = if (application && !kotlinDsl) settingsBefore.replace("'app'", "':renamed'")
+            else settingsBefore.replace(":app", ":renamed")
+        expected[settings] = includeEdit + mapping
+        literalConsumerBuild?.let { path ->
+            val before = if (kotlinDsl) """implementation(project(":app"))""" else "implementation project(':app')"
+            expected[path] = originals.getValue(path).replace(before, before.replace(":app", ":renamed"))
+        }
         assertEquals(expected, contents())
         assertTrue(Files.isDirectory(requireNotNull(root).resolve("app")))
         assertFalse(Files.exists(requireNotNull(root).resolve("renamed")))
@@ -174,7 +187,8 @@ private class NativeGradleLiteralRenameFixture : AutoCloseable {
         inputs.forEach { (path, text) -> write(workspace, path, text) }
         val log = workspace.resolve("compile.log")
         val command = listOf(gradle.toString(), "--offline", "--no-daemon", "--no-watch-fs", "--console=plain", "--max-workers=1",
-            "--gradle-user-home", requireNotNull(home).toString(), "-Dorg.gradle.java.home=$sdk", ":renamed:compileJava", ":library:compileJava")
+            "--gradle-user-home", requireNotNull(home).toString(), "-Dorg.gradle.java.home=$sdk", ":renamed:compileJava", ":library:compileJava") +
+            if (application) listOf(":library:run") else emptyList()
         val process = ProcessBuilder(command).directory(workspace.toFile()).redirectErrorStream(true).redirectOutput(log.toFile())
             .apply { environment()["JAVA_HOME"] = sdk.toString() }.start()
         try {
@@ -185,8 +199,78 @@ private class NativeGradleLiteralRenameFixture : AutoCloseable {
         }
         assertTrue(Files.isRegularFile(workspace.resolve("app/build/classes/java/main/fixture/App.class")))
         assertTrue(Files.isRegularFile(workspace.resolve("library/build/classes/java/main/fixture/Library.class")))
+        if (application) {
+            assertTrue(Files.isRegularFile(workspace.resolve("peer/build/classes/java/main/fixture/Peer.class")))
+            assertTrue(Files.readString(log).contains("renamed library and peer = 3"))
+        }
         assertFalse(Files.exists(workspace.resolve("renamed")))
         assertEquals(inputs, contents(workspace))
+    }
+
+    private fun addApplicationInputs(inputs: MutableMap<String, String>, buildName: String, form: String) {
+        inputs["peer/src/main/java/fixture/Peer.java"] =
+            "package fixture; public final class Peer { public int value() { return 2; } }\n"
+        inputs["library/src/main/java/fixture/Library.java"] = """
+            package fixture;
+            public final class Library {
+                public static void main(String[] args) {
+                    System.out.println("renamed library and peer = " + (new App().value() + new Peer().value()));
+                }
+            }
+        """.trimIndent() + "\n"
+        if (kotlinDsl) {
+            inputs[buildName] = "plugins { base }\n"
+            inputs["peer/$buildName"] = "plugins { id(\"java-library\") }\n"
+            val target = if (form == "application dynamic dependency") "targetPath" else "\":app\""
+            val variable = if (form == "application dynamic dependency") "val targetPath = \":app\"\n" else ""
+            val hook = if (form == "application dependency hook") "dependencies.add(\"implementation\", project(\":app\"))\n" else ""
+            inputs["library/$buildName"] = """
+                import org.gradle.api.tasks.compile.JavaCompile
+                import org.gradle.api.tasks.testing.Test
+                plugins { application }
+                group = "fixture"
+                version = "1.0"
+                application { mainClass.set("fixture.Library") }
+                repositories { mavenCentral() }
+                ${variable}dependencies {
+                    implementation(project($target))
+                    implementation(project(":peer"))
+                }
+                ${hook}tasks.withType<JavaCompile>().configureEach { options.release.set(17) }
+                tasks.withType<Test>().configureEach { useJUnit(); systemProperty("fixture.mode", "base") }
+            """.trimIndent() + "\n"
+        } else {
+            inputs[buildName] = """
+                subprojects {
+                    apply plugin: 'java-library'
+                    group = 'fixture'
+                    version = '1.0'
+                    repositories { mavenCentral() }
+                    java { withSourcesJar() }
+                    tasks.withType(JavaCompile).configureEach { options.release = 17 }
+                    tasks.withType(Test).configureEach { useJUnit() }
+                }
+            """.trimIndent() + "\n"
+            inputs["app/$buildName"] = ""
+            inputs["peer/$buildName"] = "tasks.withType(JavaCompile).configureEach { options.compilerArgs.add('-proc:none') }\n"
+            val target = if (form == "application dynamic dependency") "targetPath" else "':app'"
+            val variable = if (form == "application dynamic dependency") "def targetPath = ':app'\n" else ""
+            val duplicate = if (form == "application duplicate origin") "implementation project(':app')" else ""
+            inputs["library/$buildName"] = """
+                apply plugin: 'application'
+                application { mainClass = 'fixture.Library' }
+                ${variable}dependencies {
+                    implementation project($target)
+                    runtimeOnly project(':peer')
+                    compileOnly project(':peer')
+                    $duplicate
+                }
+                // The project path in this comment is not a declaration: :app
+                def fixtureMode = providers.gradleProperty('fixtureMode').getOrElse('base')
+                tasks.named('compileJava') { options.compilerArgs.add('-Agreeting.mode=' + fixtureMode) }
+                tasks.named('test') { systemProperty 'fixture.expectedMode', fixtureMode }
+            """.trimIndent() + "\n"
+        }
     }
     private fun selectedContextRequest() = buildJsonObject {
         put("sdkHome", sdk.toString()); put("expectedSnapshotHash", snapshot)

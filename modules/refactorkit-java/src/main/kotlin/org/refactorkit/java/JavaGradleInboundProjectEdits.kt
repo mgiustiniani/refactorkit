@@ -39,7 +39,7 @@ internal object JavaGradleInboundProjectEdits {
         }
         if (model.attributes["gradle.compositeBuildCount"] != "1" || target in consumers ||
             opaqueSetup ||
-            !settingsPattern(settings.path.fileName.toString()).matches(settings.content)
+            !GradleProjectRenameScript.settingsAreLocal(settings.path.fileName.toString(), settings.content)
         ) return null
 
         val workspace = snapshot.workspace.root.toAbsolutePath().normalize()
@@ -53,7 +53,8 @@ internal object JavaGradleInboundProjectEdits {
         ) return null
 
         val modulesByDirectory = model.modules.associateBy { workspace.relativize(it.root.normalize()) }
-        val origins = mutableSetOf<String>()
+        val modulesByProject = model.modules.associateBy { it.attributes["gradle.projectPath"] }
+        val ownersByDependency = mutableMapOf<String, MutableSet<String>>()
         val edits = mutableListOf<FileEdit.Modify>()
         for (script in scripts) {
             val directory = script.path.parent ?: Path.of("")
@@ -63,41 +64,38 @@ internal object JavaGradleInboundProjectEdits {
             if (!Files.isRegularFile(physicalFile, LinkOption.NOFOLLOW_LINKS) ||
                 runCatching { physicalFile.toRealPath() }.getOrNull() != workspaceReal.resolve(script.path)
             ) return null
-            val match = buildPatterns(script.path.fileName.toString()).firstNotNullOfOrNull {
-                it.matchEntire(script.content)
-            } ?: return null
-            val path = match.groups["path"] ?: continue
-            if (path.value != oldPath || module == null || module !in consumers || !origins.add(module.id)) return null
-            val range = SourceRange(
-                TextEdits.positionForOffset(script.content, path.range.first),
-                TextEdits.positionForOffset(script.content, path.range.last + 1),
-            )
-            edits += FileEdit.Modify(script.path, listOf(TextEdit(range, newPath)))
+            val declarations = GradleProjectRenameScript.dependencies(script.path.fileName.toString(), script.content)
+                ?: return null
+            if (declarations.isEmpty()) continue
+            val owner = module ?: return null
+            for (declaration in declarations) {
+                val referenced = modulesByProject[declaration.path] ?: return null
+                ownersByDependency.getOrPut(referenced.id, ::mutableSetOf).add(owner.id)
+            }
+            val selected = declarations.filter { it.path == oldPath }
+            if (selected.isEmpty()) continue
+            if (owner !in consumers || selected.map { it.configuration }.toSet().size != selected.size) return null
+            edits += FileEdit.Modify(script.path, selected.map { declaration ->
+                val range = SourceRange(
+                    TextEdits.positionForOffset(script.content, declaration.range.first),
+                    TextEdits.positionForOffset(script.content, declaration.range.last + 1),
+                )
+                TextEdit(range, newPath)
+            })
         }
-        if (origins != consumers.mapTo(mutableSetOf()) { it.id }) return null
+        if (edits.isEmpty() || !transitiveOwners(target.id, ownersByDependency).containsAll(consumers.map { it.id })) return null
         return Evidence(edits, scripts)
     }
 
-    private const val path = """:[A-Za-z0-9._:-]+"""
-    private const val name = """[A-Za-z0-9._-]+"""
-    private const val separator = """(?:[ \t]*;[ \t\r\n]*|[ \t]*\r?\n[ \t\r\n]*)"""
-    private const val compatibility = """(?:sourceCompatibility|targetCompatibility)\s*=\s*JavaVersion\.VERSION_[0-9_]+"""
-    private val javaBlock = """(?:java\s*\{\s*$compatibility(?:$separator$compatibility)?\s*;?\s*\}\s*)?"""
-    private val kotlinSettings = Regex("""\s*(?:rootProject\.name\s*=\s*"$name"$separator)?include\s*\(\s*"$path"(?:\s*,\s*"$path")*\s*\)\s*;?\s*""")
-    private val groovyName = """(?:"$name"|'$name')"""
-    private val groovyPath = """(?:"$path"|'$path')"""
-    private val groovyPaths = """$groovyPath(?:\s*,\s*$groovyPath)*"""
-    private val groovySettings = Regex("""\s*(?:rootProject\.name\s*=\s*$groovyName$separator)?include(?:\s+$groovyPaths|\s*\(\s*$groovyPaths\s*\))\s*;?\s*""")
-    private val kotlinBuild = Regex("""\s*(?:plugins\s*\{\s*(?:java|`java-library`|base)\s*;?\s*\}\s*)?$javaBlock(?:dependencies\s*\{\s*implementation\s*\(\s*project\s*\(\s*"(?<path>$path)"\s*\)\s*\)\s*;?\s*\}\s*)?""")
-    private const val pluginId = """(?:java(?:-library)?|base)"""
-    private val groovyPlugin = """(?:'$pluginId'|"$pluginId")"""
-    private val groovyPrefix = """\s*(?:plugins\s*\{\s*id(?:\s+$groovyPlugin|\s*\(\s*$groovyPlugin\s*\))\s*;?\s*\}\s*)?$javaBlock"""
-    private val groovyProject = """project\s*\(\s*(?<quote>['"])(?<path>$path)\k<quote>\s*\)"""
-    private val groovyBuilds = listOf(
-        Regex("""$groovyPrefix(?:dependencies\s*\{\s*implementation\s+$groovyProject\s*;?\s*\}\s*)?"""),
-        Regex("""$groovyPrefix(?:dependencies\s*\{\s*implementation\s*\(\s*$groovyProject\s*\)\s*;?\s*\}\s*)?"""),
-    )
-
-    private fun settingsPattern(name: String) = if (name.endsWith(".kts")) kotlinSettings else groovySettings
-    private fun buildPatterns(name: String) = if (name.endsWith(".kts")) listOf(kotlinBuild) else groovyBuilds
+    // The synchronized model reports the resolved closure; only direct source origins get edits.
+    private fun transitiveOwners(target: String, owners: Map<String, Set<String>>): Set<String> {
+        val reached = mutableSetOf(target)
+        val pending = ArrayDeque(listOf(target))
+        while (pending.isNotEmpty()) {
+            for (consumer in owners[pending.removeFirst()].orEmpty()) {
+                if (reached.add(consumer)) pending.addLast(consumer)
+            }
+        }
+        return reached
+    }
 }
