@@ -9545,6 +9545,34 @@ nor does it qualify packaged/native IDE acceptance. The broader consumer status
 remains `actionable`; see the integrated
 link:../integration-contracts.md[IDE backlog].
 
+[[java-introduce-parameter-object]]
+=== Introduce Parameter Object from a saved Java method — 2026-11-21
+
+The daemon advertises `introduceParameterObject` with compiler evidence and
+`managed-stable` authority. The SDK-bound `mutationSelection` must resolve to the
+saved method. In `refactor.preview`, `arguments.typeName` names the nested type
+and `arguments.parameters` is an array of exactly two names, listed in
+declaration order.
+
+The bounded operation groups two adjacent unmodified primitive parameters of
+one private ordinary method and rewrites one unqualified invocation from
+another method of the same top-level class. The generated Java 8-compatible
+nested class stores both values in final fields. The original argument
+expressions stay in their original evaluation order. JDT verifies the staged
+invocation and constructor bindings and the existing managed transaction
+carries the exact selection through Apply and rollback. The preview warns
+about allocation and the changed private reflective signature. Invalid wire
+shapes return `-32602`; unsupported semantic shapes return a typed
+`java.introduceParameterObject.*` refusal without a managed plan.
+
+The link:../../features/java-introduce-parameter-object.feature[acceptance Story]
+checks evaluation through managed Apply and byte-exact rollback. The Linux ZIP
+from `074069f9` passes the native daemon path using Java context v7 with Temurin
+8u512, offline Maven verification and the same runtime result before Apply,
+after Apply and after rollback. The receipt and archive evidence are under
+`.refactorkit/runs/v080-ide-java-parameter-object-20261121-r001/`. Desktop IDE
+acceptance on X11 and Wayland is `actionable` with that ZIP.
+
 === Java extractVariable bounded operation — 2026-10-24
 
 The managed `extractVariable` cell accepts a complete JDT-bound subexpression
@@ -9651,6 +9679,31 @@ compiler evidence. This acceptance does not cover public/external reads,
 computed constant expressions, dirty editor buffers, LSP, or packaged/native
 IDE consumers. Those boundaries remain open in
 link:../integration-contracts.md[the Java integration backlog].
+
+[[java-inline-method-managed-saved-cursor]]
+=== Java Inline Method from a saved cursor — 2026-11-21
+
+The Java project-context catalogue exposes `inlineMethod` with `managed-stable`
+authority. The daemon accepts the exact saved method binding from
+`intelligence.query` with `kind=mutationSelection` and an available Java project
+context. The preview replaces a single unqualified call used directly in a
+return statement and removes its private static zero-argument `int` helper in
+the same top-level class. The helper returns an independent constant expression.
+JDT verifies the replacement and the staged diagnostics before the daemon grants
+managed Apply. The preview warns about reflective observation of the removal.
+Requests with a missing selection, multiple bound uses, or an explicit receiver
+retain the `java.inlineMethod.unsupported` refusal.
+
+The existing Inline Method requirement verifies the saved-selection daemon path
+and the three earlier refusal scenarios. Linux x86-64 candidate `aa06a78e`
+passed the Inline Method, Inline Constant, and Inline Variable AppImage scenarios
+on X11 and KWin Wayland. The traces bind each Inline Method selection to its
+preview and link Apply to rollback. Maven 3.9.11 and JDK 21 verify the applied
+source copy offline, and rollback restores the original snapshot. The consumer
+verification compares all 225 runtime files with the candidate ZIP. Evidence is
+retained under `.refactorkit/runs/v080-ide-java-inline-method-20261121-r001/`.
+The exact Story is
+link:../../features/java-inline-method-refusal.feature[`REQ-JAVA-INLINE-METHOD-REFUSAL-001#saved-private-static-method-inlines-its-one-same-class-call`].
 
 [[java-extract-interface-bounded-operation]]
 === Java extractInterface bounded operation — 2026-10-24
