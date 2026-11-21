@@ -279,6 +279,12 @@ Feature: Bind the v0.8 Linux asset to its actual source and captured native evid
       | resolved component archive drift | SPDX_RUNTIME_COMPONENT_DIGEST_MISMATCH |
 
 
+  @REQ-C-RELEASE-EVIDENCE-001#runtime-image-tracks-the-selected-build-jdk-contents
+  Scenario: Runtime image tracks the selected build JDK contents
+    Given the packaging build runs on an installed JDK 21
+    When the actual Gradle runtime image task is configured
+    Then its file inputs include the selected JDK release metadata, linker, implementation and JMODs
+
   @REQ-C17-DOWNLOADED-RELEASE-001#verifies-downloaded-linux-assets-before-executing-the-runtime
   Scenario Outline: Verifies downloaded Linux assets before executing the runtime
     Given downloaded release evidence has "<condition>"

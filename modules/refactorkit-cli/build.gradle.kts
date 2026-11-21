@@ -162,11 +162,16 @@ tasks.register<Exec>("jlinkRuntime") {
     description = "Create a minimal Java runtime image for the RefactorKit CLI using jlink."
 
     val output = runtimeDir.get().asFile
+    val javaHome = File(System.getProperty("java.home"))
+    val linker = File(javaTool("jlink"))
     outputs.dir(output)
     inputs.property("runtimeModules", runtimeModules)
+    inputs.files(javaHome.resolve("release"), linker, javaHome.resolve("lib/modules"))
+        .withPropertyName("packagingJdkFiles")
+    inputs.dir(javaHome.resolve("jmods")).withPropertyName("packagingJdkModules")
 
     doFirst { delete(output) }
-    executable = javaTool("jlink")
+    executable = linker.absolutePath
     args(
         "--add-modules", runtimeModules.get(),
         "--strip-debug",

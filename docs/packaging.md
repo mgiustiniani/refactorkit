@@ -243,6 +243,10 @@ Override if needed:
   -Prefactorkit.runtime.modules=java.se,jdk.httpserver,jdk.unsupported,jdk.zipfs
 ```
 
+The runtime image task tracks the selected packaging JDK's release metadata,
+`jlink` executable, JVM modules and JMOD directory. Gradle recreates the image
+when the JDK is replaced at the same installation path.
+
 ## Java platform signature evidence
 
 Status: Java 8/21 is natively qualified; the full Java 8–25 packaged matrix
