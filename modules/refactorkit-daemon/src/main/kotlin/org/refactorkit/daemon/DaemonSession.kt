@@ -4745,6 +4745,7 @@ class DaemonSession(
                     "renderedDiff" to true,
                     "apply" to true,
                     "rollback" to true,
+                    "nestedModuleDirectoryMove" to true,
                 ),
             ),
             DaemonMethodCapability(

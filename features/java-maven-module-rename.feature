@@ -163,3 +163,18 @@ Business Need: Rename one proven direct-child Maven module without widening writ
       | arbitrary empty dir     | refuses without workspace writes |
       | non-directory output    | refuses without workspace writes |
       | modified tracked file   | refuses without workspace writes |
+
+  @REQ-JAVA-MAVEN-MODULE-RENAME-001 @REQ-JAVA-MAVEN-MODULE-RENAME-001#move-a-module-into-a-nested-directory-preserving-gav @functional-requirement
+  Scenario Outline: Move a module into a nested directory preserving GAV
+    Given the Maven directory move fixture has "<parent path>" and "<layout>"
+    When I preview relocating the Maven library to "<destination>" with its GAV preserved
+    Then the Maven directory move "<outcome>" with exact workspace evidence
+
+    Examples:
+      | parent path   | layout                  | destination                | outcome                       |
+      | explicit      | absent parent directory | components/library         | applies then rolls back       |
+      | Maven default | absent parent directory | components/library         | applies then rolls back       |
+      | explicit      | existing directory      | components/library         | applies then rolls back       |
+      | explicit      | linked ancestor         | components/library         | refuses an unsafe destination |
+      | explicit      | blocking file           | components/library         | refuses an unsafe destination |
+      | explicit      | absent parent directory | library/components/library | refuses an unsafe destination |

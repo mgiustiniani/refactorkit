@@ -52,9 +52,10 @@ import org.refactorkit.java.JavaRenameMavenModuleContract.SourceSetView
 import org.refactorkit.java.JavaRenameMavenModuleContract.StageFacts
 import org.refactorkit.java.JavaRenameMavenModuleContract.formatRange
 import org.refactorkit.java.JavaRenameMavenModuleContract.hashStrings
+import org.refactorkit.java.JavaRenameMavenModuleContract.moduleId
 import org.refactorkit.java.JavaRenameMavenModuleContract.pathString
 import org.refactorkit.java.JavaRenameMavenModuleContract.refuse
-import org.refactorkit.java.JavaRenameMavenModuleContract.requiredDirectChild
+import org.refactorkit.java.JavaRenameMavenModuleContract.requiredModuleDirectory
 import org.refactorkit.java.JavaRenameMavenModuleContract.requiredHash
 import org.refactorkit.java.JavaRenameMavenModuleContract.sha256
 import java.nio.file.Path
@@ -101,8 +102,8 @@ internal object JavaRenameMavenModuleEvidence {
             stagedJdtDiagnosticsHash = requiredHash(attributes, STAGED_JDT_DIAGNOSTICS_HASH),
             baselineDiagnosticsHash = requiredHash(attributes, BASELINE_DIAGNOSTICS_HASH),
             stagedDiagnosticsHash = requiredHash(attributes, STAGED_DIAGNOSTICS_HASH),
-            oldModule = requiredDirectChild(attributes.getValue(OLD_MODULE_ATTRIBUTE), "lease source module"),
-            newModule = requiredDirectChild(attributes.getValue(NEW_MODULE_ATTRIBUTE), "lease destination module"),
+            oldModule = requiredModuleDirectory(attributes.getValue(OLD_MODULE_ATTRIBUTE), "lease source module"),
+            newModule = requiredModuleDirectory(attributes.getValue(NEW_MODULE_ATTRIBUTE), "lease destination module"),
         )
     }
 
@@ -123,24 +124,26 @@ internal object JavaRenameMavenModuleEvidence {
         }
         val oldName = pathString(oldModule)
         val newName = pathString(newModule)
-        if (staged.modules.size != baseline.modules.size || oldName in staged.modules || newName !in staged.modules) {
+        val oldId = moduleId(oldName)
+        val newId = moduleId(newName)
+        if (staged.modules.size != baseline.modules.size || oldId in staged.modules || newId !in staged.modules) {
             refuse(DESCRIPTOR_UNAVAILABLE, "The staged reactor does not contain the exact renamed 1:1 module set")
         }
         baseline.modules.forEach { (id, before) ->
-            val expectedId = if (id == oldName) newName else id
+            val expectedId = if (id == oldId) newId else id
             val after = staged.modules[expectedId]
                 ?: refuse(DESCRIPTOR_UNAVAILABLE, "Staged reactor module is missing: $expectedId")
             val expected = before.renamed(
                 oldName,
                 newName,
-                if (id == oldName) targetArtifact else before.artifactId,
-                if (id == oldName) retainedEmptyOutputs else emptySet(),
+                if (id == oldId) targetArtifact else before.artifactId,
+                if (id == oldId) retainedEmptyOutputs else emptySet(),
             )
             if (after != expected) {
                 refuse(DESCRIPTOR_UNAVAILABLE, "Staged reactor facts differ outside the authorized module identity: $expectedId")
             }
         }
-        val source = staged.modules.getValue(newName)
+        val source = staged.modules.getValue(newId)
         if (source.groupId != sourceIdentity.groupId || source.artifactId != targetArtifact ||
             source.version != sourceIdentity.version || source.packaging != "jar"
         ) {
@@ -150,7 +153,7 @@ internal object JavaRenameMavenModuleEvidence {
         val actualConsumers = staged.modules.values.filter { module ->
             module.sourceSets.any { sourceSet ->
                 sourceSet.kind == SourceSetKind.MAIN.name &&
-                    sourceSet.dependencies.any { it.first == newName && it.second == DependencyScope.COMPILE.name }
+                    sourceSet.dependencies.any { it.first == newId && it.second == DependencyScope.COMPILE.name }
             }
         }.mapTo(linkedSetOf()) { it.id }
         if (actualConsumers != expectedConsumers) {

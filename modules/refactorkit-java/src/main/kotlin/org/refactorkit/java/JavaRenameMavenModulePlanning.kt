@@ -34,8 +34,8 @@ import org.refactorkit.java.JavaRenameMavenModuleContract.RawPom
 import org.refactorkit.java.JavaRenameMavenModuleContract.RawValue
 import org.refactorkit.java.JavaRenameMavenModuleContract.SOURCE_UNRECOGNIZED
 import org.refactorkit.java.JavaRenameMavenModuleContract.availableMavenModel
-import org.refactorkit.java.JavaRenameMavenModuleContract.directChild
-import org.refactorkit.java.JavaRenameMavenModuleContract.isDirectChild
+import org.refactorkit.java.JavaRenameMavenModuleContract.moduleDirectory
+import org.refactorkit.java.JavaRenameMavenModuleContract.moduleId
 import org.refactorkit.java.JavaRenameMavenModuleContract.pathString
 import org.refactorkit.java.JavaRenameMavenModuleContract.refuse
 import org.refactorkit.java.JavaRenameMavenModuleContract.sha256
@@ -51,17 +51,17 @@ internal object JavaRenameMavenModulePlanning {
         newModuleDir: String,
         newArtifactId: String?,
     ): PatchPlan {
-        val oldDir = directChild(oldModuleDir) ?: refuse(
+        val oldDir = moduleDirectory(oldModuleDir) ?: refuse(
             SOURCE_UNRECOGNIZED,
-            "Source module directory must be one safe direct child: '$oldModuleDir'",
+            "Source module directory must be a safe literal workspace-relative path: '$oldModuleDir'",
         )
-        val newDir = directChild(newModuleDir) ?: refuse(
+        val newDir = moduleDirectory(newModuleDir) ?: refuse(
             DESTINATION_UNRECOGNIZED,
-            "Destination module directory must be one safe direct child: '$newModuleDir'",
+            "Destination module directory must be a safe literal workspace-relative path: '$newModuleDir'",
         )
-        if (oldDir == newDir) refuse(
+        if (oldDir.startsWith(newDir) || newDir.startsWith(oldDir)) refuse(
             DESTINATION_UNRECOGNIZED,
-            "Source and destination module directories must differ",
+            "Source and destination module directories must be disjoint",
         )
         if (newArtifactId != null && newArtifactId.isBlank()) refuse(
             DESTINATION_UNRECOGNIZED,
@@ -72,11 +72,13 @@ internal object JavaRenameMavenModulePlanning {
         if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(root)) {
             refuse(SOURCE_UNRECOGNIZED, "The snapshot workspace root is not a no-follow regular directory")
         }
-        if (Files.exists(root.resolve(newDir), LinkOption.NOFOLLOW_LINKS)) {
-            refuse(DESTINATION_UNRECOGNIZED, "Destination direct child '$newDir' is not absent without following links")
+        requireDirectoryAncestors(root, oldDir, SOURCE_UNRECOGNIZED)
+        requireDirectoryAncestors(root, newDir, DESTINATION_UNRECOGNIZED)
+        if (!Files.notExists(root.resolve(newDir), LinkOption.NOFOLLOW_LINKS)) {
+            refuse(DESTINATION_UNRECOGNIZED, "Destination module directory '$newDir' is not absent without following links")
         }
         if (snapshot.trackedFiles.any { it.path.normalize().startsWith(newDir) }) {
-            refuse(DESTINATION_UNRECOGNIZED, "Destination direct child '$newDir' is already represented by the snapshot")
+            refuse(DESTINATION_UNRECOGNIZED, "Destination module directory '$newDir' is already represented by the snapshot")
         }
 
         val model = availableMavenModel(snapshot)
@@ -84,6 +86,9 @@ internal object JavaRenameMavenModulePlanning {
         val rootPom = rawPoms.getValue(ROOT_POM)
         val directModules = rootDirectModules(rootPom)
         val modelRoots = model.modules.map { JavaRenameMavenModuleEvidence.relativeModuleRoot(snapshot, it) }
+        if (modelRoots.any { it.startsWith(newDir) || newDir.startsWith(it) }) {
+            refuse(DESTINATION_UNRECOGNIZED, "Destination overlaps an effective Maven module: $newDir")
+        }
         if (directModules.size != modelRoots.size ||
             directModules.mapTo(linkedSetOf(), RawValue::text) != modelRoots.mapTo(linkedSetOf(), ::pathString)
         ) {
@@ -102,7 +107,7 @@ internal object JavaRenameMavenModulePlanning {
         }
 
         val sourceModule = model.modules.singleOrNull { module ->
-            module.id == pathString(oldDir) && JavaRenameMavenModuleEvidence.relativeModuleRoot(snapshot, module) == oldDir
+            module.id == moduleId(pathString(oldDir)) && JavaRenameMavenModuleEvidence.relativeModuleRoot(snapshot, module) == oldDir
         } ?: refuse(
             SOURCE_UNRECOGNIZED,
             "Source direct child is not exactly one effective Maven reactor module: $oldDir",
@@ -139,6 +144,9 @@ internal object JavaRenameMavenModulePlanning {
             )
         }
         val artifactChanges = targetArtifact != sourceIdentity.artifactId
+        if (artifactChanges && (oldDir.nameCount > 1 || newDir.nameCount > 1)) {
+            refuse(DESTINATION_UNRECOGNIZED, "Nested directory moves preserve the Maven artifact coordinate")
+        }
         if (artifactChanges && model.modules.any { module ->
                 module !== sourceModule && module.attributes["java.maven.groupId"] == sourceIdentity.groupId &&
                     module.attributes["java.maven.artifactId"] == targetArtifact &&
@@ -154,10 +162,13 @@ internal object JavaRenameMavenModulePlanning {
             emptyList()
         }
 
+        val parentPathEdit = parentPathEdit(sourcePom, oldDir, newDir)
+        val sourcePomEdits = buildList {
+            if (artifactChanges) add(projectArtifactOrigin.replaceWith(targetArtifact))
+            parentPathEdit?.let { (origin, replacement) -> add(origin.replaceWith(replacement)) }
+        }
         val modifications = buildList {
-            if (artifactChanges) {
-                add(FileEdit.Modify(sourcePomPath, listOf(projectArtifactOrigin.replaceWith(targetArtifact))))
-            }
+            if (sourcePomEdits.isNotEmpty()) add(FileEdit.Modify(sourcePomPath, sourcePomEdits))
             add(FileEdit.Modify(ROOT_POM, listOf(rootModuleOrigin.replaceWith(pathString(newDir)))))
             dependencyOrigins.sortedBy { pathString(it.pom.path) }.forEach { origin ->
                 add(FileEdit.Modify(origin.pom.path, listOf(origin.artifact.replaceWith(targetArtifact))))
@@ -211,6 +222,9 @@ internal object JavaRenameMavenModulePlanning {
         val originRecords = buildList {
             add(OriginRecord("child-project-artifact", sourcePom, projectArtifactOrigin, sourceIdentity.coordinate))
             add(OriginRecord("root-direct-module", rootPom, rootModuleOrigin, "direct-child:${pathString(oldDir)}"))
+            parentPathEdit?.let { (origin, _) ->
+                add(OriginRecord("child-parent-relative-path", sourcePom, origin, pathString(ROOT_POM)))
+            }
             dependencyOrigins.forEach { origin ->
                 add(OriginRecord("direct-consumer-dependency", origin.pom, origin.artifact, origin.effectiveProof))
             }
@@ -258,7 +272,11 @@ internal object JavaRenameMavenModulePlanning {
             diagnosticsBefore = stage.baselineJdt,
             diagnosticsAfterPreview = stage.stagedJdt,
             warnings = listOf(
-                "Only hash-bound raw XML element-text ranges are replaced; Maven XML is never serialized.",
+                if (parentPathEdit?.first?.text == "") {
+                    "A local parent relativePath is inserted at a hash-bound XML boundary; Maven XML is never serialized."
+                } else {
+                    "Only hash-bound raw XML element-text ranges are replaced; Maven XML is never serialized."
+                },
                 "The complete staged reactor was rebuilt offline with build execution, settings credentials and network denied.",
             ),
             riskLevel = RiskLevel.MEDIUM,
@@ -268,18 +286,69 @@ internal object JavaRenameMavenModulePlanning {
     }
 
 
+    private fun requireDirectoryAncestors(root: Path, module: Path, refusalCode: String) {
+        var directory = root
+        for (segment in module.parent ?: return) {
+            directory = directory.resolve(segment)
+            if (Files.notExists(directory, LinkOption.NOFOLLOW_LINKS)) return
+            if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+                refuse(refusalCode, "The path to module '$module' contains a symbolic link or non-directory")
+            }
+        }
+    }
+
+    private fun parentPathEdit(pom: RawPom, oldDir: Path, newDir: Path): Pair<RawValue, String>? {
+        if (oldDir.parent == newDir.parent) return null
+        val parents = pom.project.children.filter { it.localName == "parent" }
+        if (parents.isEmpty()) return null
+        val parent = parents.singleOrNull()
+            ?: refuse(AMBIGUOUS_ORIGIN, "The moved module has multiple parent origins in ${pom.path}")
+        val paths = parent.children.filter { it.localName == "relativePath" }
+        if (paths.size > 1) refuse(AMBIGUOUS_ORIGIN, "The moved module has multiple parent relative paths in ${pom.path}")
+        val explicit = paths.singleOrNull()?.let { node ->
+            if (pom.content.substring(node.contentStart, node.contentEnd).isBlank()) return null
+            rawValue(pom, node, "source parent relative path")
+        }
+        if (explicit != null && (explicit.isInterpolated || '&' in explicit.text)) {
+            refuse(PROPERTY_MANAGED, "The source parent relative path is property-managed in ${pom.path}")
+        }
+        val originalPath = Path.of(explicit?.text ?: "../pom.xml")
+        if (originalPath.isAbsolute || oldDir.resolve(originalPath).normalize() != ROOT_POM) {
+            refuse(AMBIGUOUS_ORIGIN, "The source parent relative path does not denote the root POM in ${pom.path}")
+        }
+        val replacement = pathString(newDir.relativize(ROOT_POM))
+        if (explicit != null) return if (explicit.text == replacement) null else explicit to replacement
+
+        val closing = parentClose.matchAt(pom.content, parent.contentEnd)
+            ?: refuse(AMBIGUOUS_ORIGIN, "Cannot identify the parent closing tag in ${pom.path}")
+        val tag = closing.groupValues[1] + "relativePath"
+        val element = "<$tag>$replacement</$tag>"
+        val lineStart = pom.content.lastIndexOf('\n', parent.contentEnd - 1) + 1
+        val indent = pom.content.substring(lineStart, parent.contentEnd)
+        val separateLine = lineStart > 0 && indent.all { it == ' ' || it == '\t' }
+        val offset = if (separateLine) lineStart else parent.contentEnd
+        val newline = if (lineStart > 1 && pom.content[lineStart - 2] == '\r') "\r\n" else "\n"
+        val insertion = if (separateLine) "$indent  $element$newline" else element
+        val position = TextEdits.positionForOffset(pom.content, offset)
+        return RawValue("", offset, offset, SourceRange(position, position)) to insertion
+    }
+
+    private val parentClose = Regex("</([A-Za-z_][A-Za-z0-9_.-]*:)?parent\\s*>")
+
     private fun rawReactorPoms(snapshot: ProjectSnapshot, model: BuildModel): Map<Path, RawPom> {
         val roots = model.modules.map { module ->
             val root = JavaRenameMavenModuleEvidence.relativeModuleRoot(snapshot, module)
-            if (!isDirectChild(root) || module.id != pathString(root)) {
-                refuse(SOURCE_UNRECOGNIZED, "Every effective Maven module must be one direct workspace child")
+            if (moduleDirectory(pathString(root)) != root || module.id != moduleId(pathString(root))) {
+                refuse(SOURCE_UNRECOGNIZED, "Every effective Maven module must have one literal workspace-relative directory")
             }
             if (module.attributes["java.maven.packaging"] == "pom") {
                 refuse(SOURCE_UNRECOGNIZED, "Nested or aggregating child modules are outside the bounded rename")
             }
             root
         }
-        if (roots.toSet().size != roots.size) refuse(AMBIGUOUS_ORIGIN, "Effective Maven child roots are duplicate")
+        if (roots.any { root -> roots.count { root.startsWith(it) } != 1 }) {
+            refuse(AMBIGUOUS_ORIGIN, "Effective Maven child roots overlap or are duplicate")
+        }
         val expected = (listOf(ROOT_POM) + roots.map { it.resolve("pom.xml") }).toSet()
         val actual = snapshot.auxiliaryFiles.filter { it.languageId == "maven-pom" }
         if (actual.map { it.path.normalize() }.toSet() != expected || actual.size != expected.size) {
@@ -332,8 +401,8 @@ internal object JavaRenameMavenModulePlanning {
         val modules = containers.single().children.filter { it.localName == "module" }.map { node ->
             rawValue(rootPom, node, "root direct module")
         }
-        if (modules.isEmpty() || modules.any { it.isInterpolated || '&' in it.text || directChild(it.text) == null }) {
-            refuse(AMBIGUOUS_ORIGIN, "Every root module declaration must be one direct literal child")
+        if (modules.isEmpty() || modules.any { it.isInterpolated || '&' in it.text || moduleDirectory(it.text) == null }) {
+            refuse(AMBIGUOUS_ORIGIN, "Every root module declaration must be one literal workspace-relative directory")
         }
         return modules
     }

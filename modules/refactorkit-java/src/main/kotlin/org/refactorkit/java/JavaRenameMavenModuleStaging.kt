@@ -18,6 +18,7 @@ import org.refactorkit.java.JavaRenameMavenModuleContract.StageFacts
 import org.refactorkit.java.JavaRenameMavenModuleContract.availableMavenModel
 import org.refactorkit.java.JavaRenameMavenModuleContract.hashStrings
 import org.refactorkit.java.JavaRenameMavenModuleContract.javaPlatformHome
+import org.refactorkit.java.JavaRenameMavenModuleContract.moduleId
 import org.refactorkit.java.JavaRenameMavenModuleContract.pathString
 import org.refactorkit.java.JavaRenameMavenModuleContract.refuse
 import org.refactorkit.java.JavaRenameMavenModuleContract.sha256
@@ -62,7 +63,7 @@ internal object JavaRenameMavenModuleStaging {
         // the rebased output paths, but only existing outputs enter its classpaths.
         val oldModuleRoot = workspace.resolve(oldModule)
         val retainedEmptyOutputs = availableMavenModel(rebuiltBaseline).modules
-            .single { it.id == pathString(oldModule) }.sourceSets
+            .single { it.id == moduleId(pathString(oldModule)) }.sourceSets
             .flatMap { it.outputDirectories }.distinct()
             .map { workspace.resolve(it).normalize() }
             .filter { it.startsWith(oldModuleRoot) && Files.isDirectory(it, LinkOption.NOFOLLOW_LINKS) }
@@ -195,7 +196,7 @@ internal object JavaRenameMavenModuleStaging {
             val optionalRollbackDirectories = if (expectation.destinationPresent) {
                 val target = authority.newModule.resolve("target")
                 val conventionalOutputs = setOf(target.resolve("classes"), target.resolve("test-classes"))
-                val declaredOutputs = model.modules.single { it.id == pathString(authority.newModule) }
+                val declaredOutputs = model.modules.single { it.id == moduleId(pathString(authority.newModule)) }
                     .sourceSets.flatMap { it.outputDirectories }.toSet()
                 if (declaredOutputs == conventionalOutputs &&
                     authoritative.trackedFiles.none { it.path.normalize().startsWith(target) }

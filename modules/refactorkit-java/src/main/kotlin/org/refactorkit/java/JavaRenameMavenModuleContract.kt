@@ -40,15 +40,16 @@ internal object JavaRenameMavenModuleContract {
         return model
     }
 
-    fun directChild(value: String): Path? = runCatching { Path.of(value) }.getOrNull()?.normalize()?.takeIf { path ->
-        value.isNotBlank() && value == path.toString() && isDirectChild(path) && MODULE_DIRECTORY.matches(value)
+    fun moduleDirectory(value: String): Path? {
+        if (value.split('/').any { !MODULE_DIRECTORY.matches(it) }) return null
+        return runCatching { Path.of(value) }.getOrNull()
+            ?.takeIf { !it.isAbsolute && it.normalize() == it && pathString(it) == value }
     }
 
-    fun requiredDirectChild(value: String, role: String): Path =
-        directChild(value) ?: error("$role is not one bounded direct child")
+    fun requiredModuleDirectory(value: String, role: String): Path =
+        moduleDirectory(value) ?: error("$role is not a bounded literal module directory")
 
-    fun isDirectChild(path: Path): Boolean = !path.isAbsolute && path.nameCount == 1 &&
-        path.toString() !in setOf(".", "..") && !path.startsWith("..")
+    fun moduleId(directory: String): String = directory.replace('/', ':')
 
     fun requiredHash(attributes: Map<String, String>, key: String): String =
         attributes.getValue(key).also { require(SHA256.matches(it)) { "Lease attribute '$key' is not SHA-256" } }
@@ -334,8 +335,8 @@ internal object JavaRenameMavenModuleContract {
             newArtifact: String,
             retainedEmptyOutputs: Set<String>,
         ): ModuleView = copy(
-            id = if (id == oldModule) newModule else id,
-            name = if (name == oldModule) newModule else name,
+            id = if (id == moduleId(oldModule)) moduleId(newModule) else id,
+            name = if (name == moduleId(oldModule)) moduleId(newModule) else name,
             root = renamePath(root, oldModule, newModule),
             artifactId = newArtifact,
             sourceSets = sourceSets.map { it.renamed(oldModule, newModule, retainedEmptyOutputs) },
@@ -428,7 +429,7 @@ internal object JavaRenameMavenModuleContract {
             runtimeClasspathEntries = runtimeClasspathEntries.filterNot(retainedEmptyOutputs::contains)
                 .map { renamePath(it, oldModule, newModule) },
             dependencies = dependencies.map { (target, scope) ->
-                (if (target == oldModule) newModule else target) to scope
+                (if (target == moduleId(oldModule)) moduleId(newModule) else target) to scope
             },
             attributes = attributes.mapValues { (_, value) -> renamePath(value, oldModule, newModule) },
         )

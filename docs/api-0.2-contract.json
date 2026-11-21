@@ -3075,7 +3075,8 @@
           "preview": true,
           "renderedDiff": true,
           "apply": true,
-          "rollback": true
+          "rollback": true,
+          "nestedModuleDirectoryMove": true
         }
       },
       {
