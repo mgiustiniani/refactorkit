@@ -9679,7 +9679,13 @@ JDK 21 and release 17. The Java 17 executable returns `16` in all three
 phases. Two existing regression tests cover static method and constructor
 references. Evidence is retained under
 `.refactorkit/runs/v080-ide-java-add-parameter-this-reference-20261121-r001/`.
-Native IDE qualification is pending.
+The AppImage `db901a10` used the same 225 runtime files on X11
+(`run-x5pU5R`) and KWin Wayland (`run-56JYoS`). Both environments passed the
+static and bound-instance scenarios with nine GUI steps each. The
+`this::combine` case kept the two-argument SAM and produced `23` in Maven's
+offline test. Both Apply operations retained their saved selectors, and
+rollback restored the source and editor buffer for the same transaction.
+Both environments closed with zero surviving processes.
 
 [[java-extract-delegate]]
 === Extract Delegate from a saved Java method — 2026-11-21
