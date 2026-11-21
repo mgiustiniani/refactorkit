@@ -8701,15 +8701,18 @@ recognize the extension use the two new flags to interpret inbound support.
 The legacy composite Story still has missing effective glue (`actionable`).
 The CLI command `java.rename-module` remains Maven-specific.
 
-The 2026-11-21 AppImage replay exposed an `actionable` extension under
-`REQ-JAVA-GRADLE-MODULE-RENAME-001`. The selected Groovy
-`implementation project(':library')` is literal, but its reactor combines the
-built-in application plugin, external JUnit coordinates and additional literal
-project dependencies. The current bounded script check refuses the preview.
-Extend the managed preview to identify the selected declaration in this
-ordinary declarative consumer and preserve the other dependencies, then prove
-offline build and exact rollback from the IDE. Keep typed refusals for dynamic
-or ambiguous declarations and unqualified external consumers.
+The application-consumer scenario extends
+`REQ-JAVA-GRADLE-MODULE-RENAME-001` to built-in Java and application plugins,
+external JUnit coordinates and additional literal project dependencies. The
+planner identifies direct declaration ranges, checks that the captured sources
+explain the incoming resolved project graph, and changes only the selected
+project path. It preserves other dependency declarations and supported
+application, compiler, repository and test configuration byte for byte. The two
+IDE fixture projects pass packaged daemon Apply, offline tests and Java execution
+on independent copies, followed by exact rollback, with Gradle 9.8.1 and JDK 21.
+The AppImage replay for this expanded case remains actionable. Dynamic or
+ambiguous declarations, dependency hooks and unqualified external consumers
+retain the typed inbound-dependency refusal.
 
 This route does not implement physical Gradle module relocation or any mixed
 Maven/Gradle ownership transform. Gradle dependency and source-set transforms and
