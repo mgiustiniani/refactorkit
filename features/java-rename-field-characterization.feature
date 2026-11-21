@@ -158,3 +158,18 @@ Ability: Rename an owner-bound Java field with exact JDT binding evidence, fall 
     When the caller requests a renameMember preview for that owner-bound field with a valid new field name
     Then the typed reference analysis lists the exact JPQL property locations and the preview edits only those property tokens
     And the reference set is incomplete, risk is HIGH, and managed apply is refused before workspace mutation
+
+  @REQ-JAVA-RENAME-FIELD-CHAR-001 @functional-requirement @REQ-JAVA-RENAME-FIELD-CHAR-001#opaque-workspace-query-resources-keep-jpql-field-rename-incomplete
+  Scenario Outline: Opaque workspace query resources keep JPQL field rename incomplete
+    Given a JPA entity field whose property is referenced by a static Spring Data JPQL query
+    And the workspace contains an opaque JPQL resource "<resource>"
+    When the caller requests a renameMember preview for that owner-bound field with a valid new field name
+    Then the typed reference analysis lists the exact JPQL property locations and the preview edits only those property tokens
+    And the preview identifies the uninspected JPQL resource "<resource>"
+    And the reference set is incomplete, risk is HIGH, and managed apply is refused before workspace mutation
+
+    Examples:
+      | resource                                                |
+      | src/main/resources/META-INF/orm.xml                     |
+      | src/main/resources/META-INF/jpa-named-queries.properties  |
+      | src/test/resources/queries/user.jpql                     |

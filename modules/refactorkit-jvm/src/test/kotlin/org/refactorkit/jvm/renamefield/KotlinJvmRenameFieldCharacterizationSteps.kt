@@ -162,6 +162,26 @@ class KotlinJvmRenameFieldCharacterizationSteps(private val context: KotlinJvmRe
         declarationPath = Path.of("src/main/java/com/example/User.java")
     }
 
+    @Given("^the workspace contains an opaque JPQL resource \"([^\"]+)\"$")
+    fun workspaceContainsOpaqueJpqlResource(resource: String) {
+        val root = requireNotNull(fixtureRoot)
+        val path = Path.of(resource)
+        val query = "select u.amount from User u"
+        val content = when (path.fileName.toString()) {
+            "orm.xml" -> """
+                <entity-mappings xmlns="https://jakarta.ee/xml/ns/persistence/orm" version="3.2">
+                  <named-query name="User.external"><query>$query</query></named-query>
+                </entity-mappings>
+            """.trimIndent() + "\n"
+            "jpa-named-queries.properties" -> "User.external=$query\n"
+            "user.jpql" -> "$query\n"
+            else -> error("Unknown JPQL resource fixture: $resource")
+        }
+        write(root, resource, content)
+        snapshot = JavaProjectScanner().scan(root)
+        assertEquals(content, requireNotNull(snapshot).auxiliaryFiles.single { it.path == path }.content)
+    }
+
     @Given("^a Java 21 source-level workspace snapshot containing a record component, canonical constructor, and same-named unrelated field$")
     fun workspaceWithRecordComponentAndSameNamedField() {
         val root = temporaryDirectory("rk-jvm-renamefield-record-component")
@@ -448,6 +468,16 @@ class KotlinJvmRenameFieldCharacterizationSteps(private val context: KotlinJvmRe
         assertEquals(query.replace("u.amount", "u.renamed"), postImage, "only the two JPQL property tokens should change")
     }
 
+    @Then("^the preview identifies the uninspected JPQL resource \"([^\"]+)\"$")
+    fun identifiesUninspectedJpqlResource(resource: String) {
+        val currentPlan = requireNotNull(plan)
+        val warnings = requireNotNull(currentPlan.referenceAnalysis).warnings
+        val expected = "JPQL reference closure cannot inspect workspace resource '$resource'."
+        assertTrue(expected in warnings, "Expected the exact resource warning, got $warnings")
+        assertTrue(expected in currentPlan.warnings, "The preview must surface the reference-analysis warning")
+        assertTrue(Path.of(resource) !in currentPlan.affectedFiles, "Uninspected resources must stay read-only")
+    }
+
     @Then("^the reference set is incomplete, risk is HIGH, and managed apply is refused before workspace mutation$")
     fun incompleteReferenceSetRefusesManagedApply() {
         val snap = requireNotNull(snapshot)
@@ -483,6 +513,8 @@ class KotlinJvmRenameFieldCharacterizationSteps(private val context: KotlinJvmRe
             val protocolAnalysis = preview.getValue("referenceAnalysis").jsonObject
             assertEquals("INCOMPLETE", protocolAnalysis.getValue("completeness").jsonPrimitive.content)
             assertEquals(false, protocolAnalysis.getValue("completeProject").jsonPrimitive.content.toBoolean())
+            assertEquals(currentPlan.referenceAnalysis?.warnings,
+                protocolAnalysis.getValue("warnings").jsonArray.map { it.jsonPrimitive.content })
             val protocolReferences = protocolAnalysis.getValue("references").jsonArray
             assertEquals(2, protocolReferences.size, "daemon plan JSON must expose both exact framework references")
             assertTrue(protocolReferences.all {

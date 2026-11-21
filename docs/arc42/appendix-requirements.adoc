@@ -11650,6 +11650,26 @@ consumer qualification remains actionable; owner `refactorkit-java`, status
 property references with Apply disabled matches this incomplete-closure
 boundary; it adds no completeness or mutation-authority claim.
 
+[[java-framework-jpql-opaque-inputs-2026-11-21]]
+==== Captured JPQL resources in entity-field rename review
+
+The existing `REQ-JAVA-RENAME-FIELD-CHAR-001` reports the workspace-relative
+paths of captured JPQL and HQL files, JPA descriptors under `META-INF`, and
+Spring Data `jpa-named-queries.properties` as uninspected inputs. The preview
+retains the binding-selected Java edits and the exact supported static
+`@Query` property ranges. Managed Apply refuses with
+`referenceAnalysis.incomplete` before any file mutation. The bounded list of
+resource paths includes the count of any additional uninspected resources.
+
+The first managed case is actionable in the Java adapter. It needs a complete
+provider-owned Maven workspace, a binding-selected private entity field with
+explicit field access and a declared database column name that stays the same,
+and complete inspection of the query and mapping inputs. The write boundary
+must also re-enumerate relevant inputs under the workspace lock. It currently
+rechecks the bytes of known auxiliary files. The managed path requires proof
+that a newly added opaque input prevents journal creation, as well as
+diagnostics and byte-exact Apply and rollback on a supported project.
+
 The Maven test-JVM gap extends the existing M2 requirement
 `REQ-JAVA-PROJECT-CONTEXT-001`. The bounded `project.context.v7` increment
 projects direct same-POM Surefire settings on provider `test` source sets and

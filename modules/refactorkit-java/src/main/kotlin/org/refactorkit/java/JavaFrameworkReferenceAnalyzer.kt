@@ -49,6 +49,19 @@ class JavaFrameworkReferenceAnalyzer {
         val warnings = mutableListOf(
             "Reference closure is incomplete: only direct static Spring Data @Query JPQL property paths are inspected; JPA mappings, XML/YAML/properties, named queries, migrations, generated metamodels, reflection, and external consumers remain outside this analysis.",
         )
+        val opaqueResourcePaths = snapshot.auxiliaryFiles.asSequence()
+            .map(SourceFile::path)
+            .filter(::isOpaqueQueryResource)
+            .map { it.toString().replace('\\', '/') }
+            .sorted()
+            .toList()
+        opaqueResourcePaths.take(MAX_REPORTED_OPAQUE_RESOURCES).forEach { path ->
+            warnings += "JPQL reference closure cannot inspect workspace resource '$path'."
+        }
+        val remainingResources = opaqueResourcePaths.size - MAX_REPORTED_OPAQUE_RESOURCES
+        if (remainingResources > 0) {
+            warnings += "JPQL reference closure also leaves $remainingResources workspace resource(s) uninspected."
+        }
         val editsByPath = linkedMapOf<Path, MutableList<TextEdit>>()
         val references = mutableListOf<PlanReferenceEvidence>()
 
@@ -120,6 +133,12 @@ class JavaFrameworkReferenceAnalyzer {
             warnings = warnings.distinct(),
         )
         return JavaFrameworkFieldRenameEvidence(analysis, sortedEdits)
+    }
+
+    private fun isOpaqueQueryResource(path: Path): Boolean {
+        val name = path.fileName.toString().lowercase()
+        return name.endsWith(".jpql") || name.endsWith(".hql") || name == "jpa-named-queries.properties" ||
+            (name in JPA_DESCRIPTORS && path.parent?.fileName?.toString().equals("META-INF", ignoreCase = true))
     }
 
     private fun queryAnnotationOffsets(content: String, imports: Set<String>): List<Pair<Int, String>> {
@@ -235,6 +254,8 @@ class JavaFrameworkReferenceAnalyzer {
     private data class QueryLiteral(val value: String, val contentOffset: Int)
 
     private companion object {
+        const val MAX_REPORTED_OPAQUE_RESOURCES = 32
+        val JPA_DESCRIPTORS = setOf("orm.xml", "persistence.xml")
         val TYPE_KEYWORDS = listOf("class", "record", "enum", "interface")
         val JPQL_KEYWORDS = setOf("as", "where", "join", "left", "right", "inner", "outer", "fetch", "on", "group", "order", "having")
         val FROM_PATTERN = Regex(
