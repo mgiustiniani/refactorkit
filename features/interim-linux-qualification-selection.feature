@@ -38,6 +38,19 @@ Feature: Select only the admitted host during interim qualification
       | k5-move-next-native               |
       | k5-bounded-completion-native     |
 
+  @REQ-C-INTERIM-HOST-001
+  @REQ-C-INTERIM-HOST-001#clean-native-builds-prepare-the-cli-installation-tripwire-before-regression
+  Scenario Outline: Clean native builds prepare the CLI installation tripwire before regression
+    Given an interim qualification request uses "<event>" and "<target>"
+    When the repository workflow selects its qualification jobs
+    Then the clean "<job>" build prepares the CLI installation tripwire before regression
+    And interim selection preserves native verification and historical release guards
+
+    Examples:
+      | event   | target | job                    |
+      | push    | main   | cross-platform-runtime |
+      | release | v0.8.0 | build-runtime          |
+
   @REQ-C-INTERIM-HOST-001#ci-and-the-v0-8-release-test-c-against-the-attested-clang-toolchain
   @ci-exact-clang-toolchain
   Scenario: CI and the v0.8 release test C against the attested Clang toolchain

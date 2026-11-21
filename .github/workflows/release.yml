@@ -207,6 +207,11 @@ jobs:
         if: ${{ github.ref_name != 'v0.7.0' && !startsWith(github.ref_name, 'v0.8.') }}
         run: ${{ matrix.gradle }} clean build --no-daemon
 
+      - name: Prepare CLI installation boundary for clean runner
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: python3 scripts/prepare-ci-cli-boundary.py --runner-home "$HOME"
+
       - name: Clean v0.8 build and complete standard regression
         if: startsWith(github.ref_name, 'v0.8.')
         shell: bash

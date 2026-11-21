@@ -550,6 +550,10 @@ jobs:
           import subprocess, sys
           subprocess.run([sys.executable, "scripts/test-smoke-packaged-kill-recovery.py"], check=True)
 
+      - name: Prepare CLI installation boundary for clean runner
+        shell: bash
+        run: python3 scripts/prepare-ci-cli-boundary.py --runner-home "$HOME"
+
       - name: Build and test
         run: ${{ matrix.gradle }} build --no-daemon
 

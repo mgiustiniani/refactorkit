@@ -184,6 +184,49 @@ class InterimLinuxQualificationSteps {
         }
     }
 
+    @Then("the clean {string} build prepares the CLI installation tripwire before regression")
+    fun cleanCliBoundary(jobName: String) {
+        val forRelease = event == "release"
+        val workflow = if (forRelease) release else ci
+        val jobSteps = steps(mapping(mapping(workflow["jobs"])[jobName]))
+        val setup = jobSteps.singleOrNull { it["name"] == "Prepare CLI installation boundary for clean runner" }
+        val buildName = if (forRelease) "Clean v0.8 build and complete standard regression" else "Build and test"
+        assertNotNull(setup, "The clean runner needs a CLI installation tripwire")
+        assertTrue(jobSteps.indexOf(setup) < jobSteps.indexOf(jobSteps.single { it["name"] == buildName }))
+        assertEquals("bash", setup["shell"])
+        assertEquals(if (forRelease) "startsWith(github.ref_name, 'v0.8.')" else null, setup["if"])
+        val script = "scripts/prepare-ci-cli-boundary.py"
+        assertEquals("python3 $script --runner-home \"\$HOME\"", setup["run"])
+
+        val runnerHome = Files.createTempDirectory("rk-clean-cli-boundary-")
+        val log = runnerHome.resolve("prepare.log").toFile()
+        try {
+            fun prepare(): Int {
+                val process = ProcessBuilder("python3", "-B", script, "--runner-home", runnerHome.toString())
+                    .directory(repository.toFile()).redirectErrorStream(true).redirectOutput(log).start()
+                if (!process.waitFor(20, TimeUnit.SECONDS)) {
+                    process.destroyForcibly()
+                    error("Runner CLI boundary preparation timed out")
+                }
+                return process.exitValue()
+            }
+            val prepared = prepare()
+            assertEquals(0, prepared, log.readText())
+            val root = runnerHome.resolve(".local/share/refactorkit")
+            val launcher = root.resolve("bin/refactorkit")
+            assertTrue(Files.isRegularFile(launcher) && Files.isExecutable(launcher))
+            assertEquals(listOf("bin", "bin/refactorkit"), Files.walk(root).use { paths ->
+                paths.filter { it != root }.map { root.relativize(it).toString() }.sorted().toList()
+            })
+            val firstBytes = Files.readString(launcher)
+            assertTrue(firstBytes.startsWith("#!/bin/sh\n") && firstBytes.endsWith("exit 97\n"))
+            assertEquals(1, prepare(), "A second preparation must refuse the existing installation")
+            assertEquals(firstBytes, Files.readString(launcher))
+        } finally {
+            runnerHome.toFile().deleteRecursively()
+        }
+    }
+
     @When("the C qualification toolchain is prepared for workflow test tasks")
     fun prepareCQualificationToolchain() {
         val ciSteps = steps(mapping(mapping(ci["jobs"])["build"]))
