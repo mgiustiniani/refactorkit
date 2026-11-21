@@ -7,6 +7,17 @@ review safety boundaries before applying refactorings.
 
 ## Unreleased
 
+### 0.8.0 release candidate
+
+- Add C11/C17 analysis on Linux x86-64 using captured compilation commands,
+  source ownership and an explicitly configured Clang toolchain.
+- Add bounded C refactorings for rename, formatting, source and header moves,
+  API-prefix rename, signature changes, extract, inline, safe delete, include
+  organization and component relocation. Managed previews bind the captured
+  source and configuration, with transactional Apply and rollback.
+- Retain API 0.2 and the embedded Java runtime. See the [C guide](docs/c-language.md)
+  and [release plan](docs/releases/v0.8.0-plan.md) for route and qualification details.
+
 ### Next development (`0.7.0-SNAPSHOT`)
 
 - Stabilize native Windows kill-during-write qualification without weakening its

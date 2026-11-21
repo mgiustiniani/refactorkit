@@ -415,37 +415,26 @@ CI packaging verification currently checks:
   samples;
 - both the zip and checksum are uploaded as the `refactorkit-runtime` artifact.
 
-Release tag builds run natively on Linux x86_64, Windows x86_64, macOS Intel,
-and macOS Apple Silicon. Each job builds/tests, creates a host `jlink` image,
-runs signed-selector and managed format/apply/rollback smoke, verifies source
-restoration, generates checksum/SBOM/attestations, and uploads release inputs. A
-separate job verifies all checksums and publishes one release.
+The release workflow builds prospective 0.x tags on Linux x86-64. The
+four-host matrix is scheduled for 1.0.0. Each selected job builds a native
+`jlink` image, tests the extracted package, and uploads the runtime ZIP,
+checksum, SPDX document and release evidence.
 
 ## 0.8.0 C candidate package (Linux x86-64, not published)
 
-The 0.8.0 candidate is packaged for the single shipped platform only, from the
-candidate revision, with the same pipeline (packageCliRuntime then
-:modules:refactorkit-cli:refactorkitRuntimeZip):
+The candidate is built from its review revision using
+`:modules:refactorkit-cli:refactorkitRuntimeZip`, which stages the runtime via
+`packageCliRuntime`. The packaged CLI reports `RefactorKit 0.8.0 (API 0.2)`.
 
-- The package embeds a jlink runtime (runtime/bin/java) and the launcher execs
-  that absolute path, so it runs with no global Java: verified by running the
-  packaged scan with JAVA_HOME unset and with a poisoned java first on PATH that
-  is never invoked.
-- scripts/verify-runtime-archive.py --platform linux-x86_64 verifies the checksum,
-  extracts safely, and executes the packaged MCP launcher (initialize, tools/list,
-  EOF shutdown).
-- The candidate bundles refactorkit-c, but the C module ships as bounded
-  implementation slices: C10-C17 operation/surface qualification is not
-  established, so no C release row is claimed by this package.
-- The external Clang toolchain (reference 22.1.8) is configured explicitly, not
-  bundled: a version-only probe is not semantic qualification and no toolchain is
-  auto-installed.
-- The candidate keeps the source/build version 0.7.0 on purpose; the 0.8.0 bump
-  belongs to release preparation/publication, not the candidate build.
-- SPDX and attestations are release/CI-gated (anchore/sbom-action, actions/attest-*
-  on a tag) and are not produced or claimed for a local candidate. Other hosts
-  remain NOT VERIFIED. Publication is a separate, explicitly authorized step after
-  independent review and download verification.
+- The launchers use the embedded Java runtime. Archive verification checks the
+  SHA-256, executable layout, CLI version and MCP stdio handshake.
+- The ZIP includes the C adapter. Select Clang, clangd and clang-format
+  explicitly. The [C guide](c-language.md) describes the qualified operation
+  and toolchain profiles.
+- Local SPDX qualification checks the runtime files and resolved Gradle
+  components. The tagged release workflow issues GitHub attestations and
+  independently verifies its downloaded inputs before creating the draft.
+  See the [draft and public download procedure](distribution-trust.md#independent-linux-v080-release-verification).
 
 ### Side-by-side candidate testing and recovery
 
@@ -453,13 +442,20 @@ Build a local candidate into new, repository-local output directories so the
 existing distribution and installed runtime are preserved:
 
 ```bash
-candidate="$PWD/.refactorkit/runs/target-runtime-candidate-r001"
+mkdir -p "$PWD/.refactorkit/runs"
+candidate=$(mktemp -d "$PWD/.refactorkit/runs/target-runtime-candidate-XXXXXX")
 ./gradlew :modules:refactorkit-cli:refactorkitRuntimeZip \
   -Prefactorkit.package.dir="$candidate/unpacked/refactorkit" \
   -Prefactorkit.package.archive.dir="$candidate/archive"
-sha256sum "$candidate/archive/refactorkit-runtime.zip" \
-  > "$candidate/archive/refactorkit-runtime.zip.sha256"
-mkdir -p "$candidate/extracted"
+(
+  cd "$candidate/archive"
+  sha256sum refactorkit-runtime.zip > refactorkit-runtime.zip.sha256
+)
+mkdir -p "$candidate/extracted" "$candidate/tmp"
+TMPDIR="$candidate/tmp" python3 scripts/verify-runtime-archive.py \
+  "$candidate/archive/refactorkit-runtime.zip" \
+  "$candidate/archive/refactorkit-runtime.zip.sha256" \
+  --platform linux-x86_64 --expected-version 0.8.0
 unzip -q "$candidate/archive/refactorkit-runtime.zip" -d "$candidate/extracted"
 ```
 
@@ -467,9 +463,7 @@ The extracted launchers are under
 `$candidate/extracted/refactorkit/bin/`. Point an IDE test profile directly at
 that candidate's daemon launcher; do not replace `~/.local/bin/refactorkit` or
 the previously selected runtime. Record the previous executable path before
-changing the IDE profile. The current local candidate intentionally reports
-implementation version 0.7.0 and API 0.2; it is a test package for the planned
-0.8.0 line, not a published 0.8.0 release.
+changing the IDE profile.
 
 Use a disposable project copy for candidate apply/recovery tests until journal
 compatibility with the installed runtime is separately verified. This source
