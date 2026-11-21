@@ -1361,6 +1361,16 @@ relocation and rollback restores the original header and project files.
 Compatibility evidence covers the captured configuration and old include path.
 External consumers and ABI compatibility require their own qualification.
 
+In managed LSP, call `refactorkit.c.preview` through
+`workspace/executeCommand` with `operation: "relocateComponent"`, the explicit
+toolchain, and the same relocation arguments as the daemon. The preview
+returns a `planId` and a staged diff. After approval, call
+`refactorkit.applyPlan` with the `planId`. The provider applies the plan and
+returns the `transactionId` used by `refactorkit.rollback`. A compilation
+database or requested forwarding header changed after preview causes Apply to
+refuse and preserves the caller's changes.
+[Linux CLI and LSP acceptance](arc42/appendix-requirements.adoc#c15-packaged-cli-lsp-relocation-2026-11-21).
+
 ## C inline
 
 `c inline` supports a compiler-bound single-use internal `static int` function

@@ -14015,6 +14015,27 @@ HIGH-risk approval warning. Other CMake grammar, linking/exports, optional prefi
 composition, protocol matrices and complete C08/C15/C17 remain actionable.
 Evidence: `.refactorkit/runs/c08-c15-include-managed-r001/green/`.
 
+[[c15-packaged-cli-lsp-relocation-2026-11-21]]
+=== C15 component relocation through packaged CLI and LSP (2026-11-21)
+
+The Linux x86-64 ZIP with SHA-256
+`899971f5d5fd256e67c5e1dee7de122a4ff8f79908c1bb4faa8e24d49348a569`
+passed three CLI cases and five framed LSP cases with Clang 22.1.8.
+Both routes exercised a captured two-TU STATIC target in C11 and C17.
+The expected plan composes a literal CMake and compilation-database update
+with an explicit API mapping and a forwarding header at the old include path.
+Native code compiled and returned the expected value before and after Apply.
+Rollback restored the original file bytes and paths. A missing forwarding
+header was refused before journal creation. LSP also refused to apply the
+retained plan after the database or forwarding header changed, preserving
+the caller's bytes and leaving the journal absent.
+
+The complete records include two targeted LSP reruns after correcting the
+client assertion to read the documented `transactionId` property. See
+`.refactorkit/runs/v080-c17-current-linux-c-matrix-20261121-r013-c15-cli-lsp-retry-r001/reconciliation.json`.
+The CLI and managed LSP commands are described in
+link:../c-language.md#c-component-relocation[the C adapter guide].
+
 [[c08-c15-include-managed-boundaries-2026-11-13]]
 === C08/C15 include-aware input integrity and database preservation (2026-11-13)
 
