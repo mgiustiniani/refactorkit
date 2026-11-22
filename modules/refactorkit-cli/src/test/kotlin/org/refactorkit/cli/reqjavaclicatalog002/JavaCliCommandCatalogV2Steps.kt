@@ -744,10 +744,10 @@ class JavaCliCommandCatalogV2Steps {
         const val V2_ORACLE_FIXTURE =
             "org/refactorkit/cli/reqjavaclicatalog002/catalog-v2-oracle-6aaffe8c0c71.json"
         const val CAPABILITIES_FIXTURE =
-            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-v080-candidate-bbb6cd29e23a.json"
+            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-v080-candidate-865da6c69947.json"
         const val V1_ORACLE_SHA256 = "4790e142d491d0fc3fd44dfa94c65c67997bc3ffaf0133691c0afebd9ee683cb"
         const val V2_ORACLE_SHA256 = "6aaffe8c0c718685510e745abc740c1896b02050a3eff7c19146f61c7abe109d"
-        const val PINNED_CAPABILITIES_SHA256 = "bbb6cd29e23a4bd1c13ffc711a6cf5e498c0705b0e396141f51ca9ad62fdef32"
+        const val PINNED_CAPABILITIES_SHA256 = "865da6c699474761c4d2e637ba44597cbdc41a58058e6f6ebde38564245c2c07"
         const val HARNESS_PROTOCOL = "refactorkit.test.catalog-v2-guard/v1"
         const val PROBE_MODE = "probe"
         const val INVOKE_MODE = "invoke"
