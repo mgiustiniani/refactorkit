@@ -743,10 +743,10 @@ class JavaCliCommandCatalogSteps {
     private companion object {
         const val CATALOGUE_SCHEMA = "refactorkit.cli-command-catalog/v1"
         const val CAPABILITIES_FIXTURE =
-            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-v080-candidate-bbb6cd29e23a.json"
+            "org/refactorkit/cli/reqjavaclicatalog001/capabilities-v080-candidate-865da6c69947.json"
         const val HELP_FIXTURE =
             "org/refactorkit/cli/reqjavaclicatalog001/help-k5-candidate-56d503763b94.txt"
-        const val PINNED_CAPABILITIES_SHA256 = "bbb6cd29e23a4bd1c13ffc711a6cf5e498c0705b0e396141f51ca9ad62fdef32"
+        const val PINNED_CAPABILITIES_SHA256 = "865da6c699474761c4d2e637ba44597cbdc41a58058e6f6ebde38564245c2c07"
         const val PINNED_HELP_SHA256 = "56d503763b94b513cdfe370a117a48786a7b669312bb30f911e3308591fe5a54"
         const val HARNESS_PROTOCOL = "refactorkit.test.catalog-v1-guard/v1"
         const val PROBE_MODE = "probe"
