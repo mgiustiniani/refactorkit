@@ -318,8 +318,11 @@ class DaemonSession(
                             put("stability", capability.stability.name.lowercase().replace('_', '-'))
                             put("mutationAuthority", capability.mutationAuthority.name.lowercase().replace('_', '-'))
                             put("evidence", capability.evidence.name.lowercase().replace('_', '-'))
-                            if (capability.operation == "changeSignature.addParameter") {
-                                put("features", buildJsonObject { put("thisMethodReferenceMigration", true) })
+                            when (capability.operation) {
+                                "changeSignature.addParameter" ->
+                                    put("features", buildJsonObject { put("thisMethodReferenceMigration", true) })
+                                "batchCleanup" ->
+                                    put("features", buildJsonObject { put("formatterProfile", true) })
                             }
                             if (capability.operation == "moveClass") {
                                 put("targetModuleSelection", buildJsonObject {

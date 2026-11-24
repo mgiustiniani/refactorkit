@@ -156,6 +156,11 @@ private class JavaBatchFormatterProfileFixture : AutoCloseable {
     fun assertResult(expected: String) {
         assertEquals(expected, outcome)
         assertContractMetadata(expected)
+        val capabilities = requireNotNull(session).dispatch("server.capabilities", buildJsonObject {}).jsonObject
+        val operations = capabilities.getValue("javaContextRefactoring").jsonObject
+            .getValue("operationCapabilities").jsonArray
+        val batch = operations.map { it.jsonObject }.single { it.getValue("operation").jsonPrimitive.content == "batchCleanup" }
+        assertEquals(kotlinx.serialization.json.JsonPrimitive(true), batch["features"]?.jsonObject?.get("formatterProfile"))
         val workspace = requireNotNull(root)
         preview?.let { result ->
             assertEquals(profilePath, result.getValue("formatterProfilePath").jsonPrimitive.content)

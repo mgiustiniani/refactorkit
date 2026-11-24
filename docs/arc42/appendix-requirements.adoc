@@ -8793,6 +8793,10 @@ targets and all existing atomic composition/diagnostics refusals preserved.
 A profile without any `formatFile` action refuses with
 `java.batchCleanup.formatterProfileUnused`.
 
+In `server.capabilities`, the `batchCleanup` row of
+`javaContextRefactoring.operationCapabilities` advertises
+`features.formatterProfile=true` for saved-source preview and hash-bound Apply.
+
 The preview exposes `formatterProfilePath`, `formatterProfileName` and
 `formatterProfileSha256` separately from snapshot/context authority. Managed
 Apply requires that exact hash and the original SDK context. Missing or changed
