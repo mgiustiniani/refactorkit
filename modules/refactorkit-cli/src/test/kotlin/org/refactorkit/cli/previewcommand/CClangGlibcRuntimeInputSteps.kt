@@ -58,7 +58,7 @@ class CClangGlibcRuntimeInputSteps {
             }
         }
         val oraclePath = if (case in setOf("missing cache", "indirect cache")) reference else cache
-        val output = command("/usr/bin/ldconfig", "-p", "-C", oraclePath.toString())
+        val output = command("/usr/sbin/ldconfig", "-p", "-C", oraclePath.toString())
         entryCount = Regex("^(\\d+) libs found in cache").find(output)?.groupValues?.get(1)?.toInt()
             ?: error("Native oracle did not report the cache record count")
         nativeRecords = Regex("(?m)^\\s+(\\S+) \\(libc6,x86-64\\) => (.+)$").findAll(output)
