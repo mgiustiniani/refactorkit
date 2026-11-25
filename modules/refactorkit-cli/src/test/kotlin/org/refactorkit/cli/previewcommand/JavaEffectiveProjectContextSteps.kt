@@ -4314,8 +4314,12 @@ class JavaEffectiveProjectContextSteps {
             Files.copy(runtimeSdk.resolve("release"), ownedSdk.resolve("release"))
             assertFalse(Files.exists(ownedSdk.resolve("lib/src.zip")))
             ownedSdk
+        } else {
+            val selected = requireNotNull(System.getenv("REFACTORKIT_ENTRYPOINT_SDK25_HOME")) {
+                "REFACTORKIT_ENTRYPOINT_SDK25_HOME is required for SDK 25 source qualification"
+            }
+            Path.of(selected).toRealPath()
         }
-            else Path.of("/home/paperboy/.local/share/graalvm/graalvm-jdk-25-latest")
         val release = when (selection) { "missing SDK sources" -> 21; "historical release" -> 17; else -> 25 }
         write(root.resolve("pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>platform</artifactId><version>1</version><properties><maven.compiler.release>$release</maven.compiler.release></properties></project>\n")
         val consumer = "package fixture; class App { String value = new String(\"draft\"); int count = value.charAt(0); int limit = Integer.MAX_VALUE; }\n"
@@ -4324,6 +4328,11 @@ class JavaEffectiveProjectContextSteps {
         previousHash = active.dispatch("project.open", buildJsonObject { put("root", root.toString()) }).jsonObject.getValue("snapshotHash").jsonPrimitive.content
         val context = active.dispatch("project.context", buildJsonObject { put("expectedSnapshotHash", previousHash); put("sdkHome", platformSdk.toString()) }).jsonObject
         assertEquals("available", context.getValue("status").jsonPrimitive.content, context.toString())
+        if (selection != "missing SDK sources") {
+            val selected = Path.of(requireNotNull(System.getenv("REFACTORKIT_ENTRYPOINT_SDK25_HOME"))).toRealPath()
+            val observed = context.getValue("sdk").jsonArray.single().jsonObject.getValue("home").jsonPrimitive.content
+            assertEquals(selected, Path.of(observed).toRealPath())
+        }
         val token = when (selection) { "current type" -> "String value"; "current constructor" -> "String(\"draft\")"; "current field" -> "MAX_VALUE"; else -> "charAt(0)" }
         platformQuery = buildJsonObject {
             put("expectedSnapshotHash", previousHash); put("expectedContextHash", context.getValue("contextHash")); put("sdkHome", platformSdk.toString())
