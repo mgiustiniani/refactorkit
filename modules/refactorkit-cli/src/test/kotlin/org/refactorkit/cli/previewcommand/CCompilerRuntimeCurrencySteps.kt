@@ -79,7 +79,8 @@ class CCompilerRuntimeCurrencySteps {
         val reference = Path.of(assertNotNull(System.getProperty("refactorkit.c.qualificationToolchain")))
         val relativeInputs = listOf("usr/bin/clang-22", "usr/bin/clangd", "usr/bin/clang-format",
             "usr/lib/libclang-cpp.so.22.1")
-        originalInputs = (relativeInputs.map(reference::resolve) + listOf(Path.of("/usr/lib/libffi.so.8"), Path.of("/etc/ld.so.cache"))).associateWith(::hash)
+        val libffi = nativeFixtureLibffi()
+        originalInputs = (relativeInputs.map(reference::resolve) + listOf(libffi, Path.of("/etc/ld.so.cache"))).associateWith(::hash)
         assertEquals("31a40dc31f3c15a47aa119aa148f339bf363d8f61202ddbdacbd3f24b71ba113", originalInputs.getValue(reference.resolve("usr/bin/clang-22")))
         assertEquals("aacb4651e1886b98c5413369fc1789f4ca2d4fa5b94fdf0de4f48c98a52d4324", originalInputs.getValue(reference.resolve("usr/bin/clangd")))
         assertEquals("b60fe916a9d98bfd0f317a210f6a06dfde1217ebb0b605da697ef211208d3bcf", originalInputs.getValue(reference.resolve("usr/bin/clang-format")))
@@ -87,7 +88,7 @@ class CCompilerRuntimeCurrencySteps {
             val target = tools.resolve(relative); Files.createDirectories(target.parent); Files.copy(reference.resolve(relative), target)
             assertEquals(-1L, Files.mismatch(reference.resolve(relative), target))
         }
-        Files.copy(Path.of("/usr/lib/libffi.so.8"), tools.resolve("usr/lib/libffi.so.8"))
+        Files.copy(libffi, tools.resolve("usr/lib/libffi.so.8"))
         // Give the copied, otherwise host-linked tools one owned runtime edge so
         // mutation tests can change a captured library without touching /usr/lib.
         for (relative in relativeInputs.take(3)) {
