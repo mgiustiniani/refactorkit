@@ -1578,7 +1578,7 @@ class JavaGradleEffectiveContextSteps {
             put("buildSystem", "gradle")
             put("expectedSnapshotHash", firstSnapshotHash)
             put("sdkHome", sdk)
-            put("gradleExecutable", "/home/paperboy/.gradle/wrapper/dists/gradle-9.6.1-bin/4ticwg1pgcbps2hj28r8so764/gradle-9.6.1/bin/gradle")
+            put("gradleExecutable", qualifiedGradleExecutable())
             put("gradleUserHome", requireNotNull(compositeGradleHome).toString())
             put("allowBuildExecution", true)
         }).jsonObject
