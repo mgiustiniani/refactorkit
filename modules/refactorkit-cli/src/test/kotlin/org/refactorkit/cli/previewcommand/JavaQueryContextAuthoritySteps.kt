@@ -183,7 +183,14 @@ final class Caller {
             put("position", buildJsonObject { put("line", 2); put("character", 15) })
             put("sourceAuthority", buildJsonObject { put("kind", "saved-snapshot") })
             put("javaContext", buildJsonObject {
-                put("sdkHome", if (authority == "other SDK") "/home/paperboy/.local/share/graalvm/graalvm-jdk-25-latest" else testJdkHome)
+                val sdkHome = if (authority == "other SDK") {
+                    requireNotNull(System.getenv("REFACTORKIT_ENTRYPOINT_SDK25_HOME")) {
+                        "REFACTORKIT_ENTRYPOINT_SDK25_HOME is required for SDK mismatch qualification"
+                    }
+                } else {
+                    testJdkHome
+                }
+                put("sdkHome", sdkHome)
                 put("expectedContextHash", context.getValue("contextHash"))
                 put("contextSchemaVersion", context.getValue("schemaVersion").jsonPrimitive.content)
             })
