@@ -87,6 +87,10 @@ class JavaGradleEffectiveContextSteps {
         baseline = contents()
     }
 
+    private fun qualifiedGradleExecutable() = requireNotNull(System.getenv("REFACTORKIT_GRADLE_9_8_1_EXECUTABLE")) {
+        "REFACTORKIT_GRADLE_9_8_1_EXECUTABLE is required for Gradle context qualification"
+    }
+
     @When("Gradle is synchronized with {string} and Java {string} context is requested")
     fun synchronize(policy: String, selection: String) {
         val selectedSdk25 by lazy {
@@ -94,9 +98,7 @@ class JavaGradleEffectiveContextSteps {
                 "REFACTORKIT_ENTRYPOINT_SDK25_HOME is required for Gradle SDK 25 qualification"
             }
         }
-        val gradle = requireNotNull(System.getenv("REFACTORKIT_GRADLE_9_8_1_EXECUTABLE")) {
-            "REFACTORKIT_GRADLE_9_8_1_EXECUTABLE is required for Gradle context qualification"
-        }
+        val gradle = qualifiedGradleExecutable()
         mode = selection
         sdk = if (policy == "explicit SDK25") selectedSdk25
             else Path.of(System.getProperty("java.home")).toRealPath().toString()
@@ -1433,7 +1435,7 @@ class JavaGradleEffectiveContextSteps {
             put("buildSystem", "gradle")
             put("expectedSnapshotHash", initial)
             put("sdkHome", sdk)
-            put("gradleExecutable", "/home/paperboy/.gradle/wrapper/dists/gradle-9.6.1-bin/4ticwg1pgcbps2hj28r8so764/gradle-9.6.1/bin/gradle")
+            put("gradleExecutable", qualifiedGradleExecutable())
             put("gradleUserHome", requireNotNull(compositeGradleHome).toString())
             put("allowBuildExecution", true)
         }).jsonObject
