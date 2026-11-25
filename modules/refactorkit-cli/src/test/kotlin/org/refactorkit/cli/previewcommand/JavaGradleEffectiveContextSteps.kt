@@ -89,20 +89,29 @@ class JavaGradleEffectiveContextSteps {
 
     @When("Gradle is synchronized with {string} and Java {string} context is requested")
     fun synchronize(policy: String, selection: String) {
-        mode = selection; sdk = if (policy == "explicit SDK25") "/home/paperboy/.local/share/graalvm/graalvm-jdk-25-latest"
+        val selectedSdk25 by lazy {
+            requireNotNull(System.getenv("REFACTORKIT_ENTRYPOINT_SDK25_HOME")) {
+                "REFACTORKIT_ENTRYPOINT_SDK25_HOME is required for Gradle SDK 25 qualification"
+            }
+        }
+        val gradle = requireNotNull(System.getenv("REFACTORKIT_GRADLE_9_8_1_EXECUTABLE")) {
+            "REFACTORKIT_GRADLE_9_8_1_EXECUTABLE is required for Gradle context qualification"
+        }
+        mode = selection
+        sdk = if (policy == "explicit SDK25") selectedSdk25
             else Path.of(System.getProperty("java.home")).toRealPath().toString()
         val initial = session!!.dispatch("project.summary", null).jsonObject.getValue("snapshotHash").jsonPrimitive.content
         try {
             val sync = session!!.dispatch("project.sync", buildJsonObject {
                 put("buildSystem", "gradle"); put("expectedSnapshotHash", initial); put("sdkHome", sdk)
-                put("gradleExecutable", "/home/paperboy/.gradle/wrapper/dists/gradle-9.6.1-bin/4ticwg1pgcbps2hj28r8so764/gradle-9.6.1/bin/gradle")
+                put("gradleExecutable", gradle)
                 put("allowBuildExecution", policy != "denied")
             }).jsonObject
             if (sync.getValue("status").jsonPrimitive.content == "refused") { result = sync; return }
             val hash = sync.getValue("snapshotHash").jsonPrimitive.content
             if (selection == "stale build") { write("build.gradle", Files.readString(root.resolve("build.gradle")) + "\n// build context changed\n"); baseline = contents() }
             result = session!!.dispatch("project.context", buildJsonObject {
-                put("expectedSnapshotHash", hash); put("sdkHome", if (selection == "other SDK") "/home/paperboy/.local/share/graalvm/graalvm-jdk-25-latest" else sdk)
+                put("expectedSnapshotHash", hash); put("sdkHome", if (selection == "other SDK") selectedSdk25 else sdk)
                 if (selection != "stale build" && selection != "other SDK") {
                     put("moduleId", ":app"); put("sourceSetId", if (selection == "test") "test" else "main")
                     put("sourceRelativePath", "pkg/Runner.java"); put("symbol", if (selection == "test") "pkg.Unrelated" else "pkg.Peer")
