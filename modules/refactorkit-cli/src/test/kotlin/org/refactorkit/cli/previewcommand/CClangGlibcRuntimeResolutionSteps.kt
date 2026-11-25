@@ -81,7 +81,7 @@ class CClangGlibcRuntimeResolutionSteps {
                 Files.write(cache, cacheFixture(native))
             }
         }
-        assertTrue(command("/usr/bin/ldconfig", "-p", "-C", cache.toString()).contains("libs found in cache"))
+        assertTrue(command("/usr/sbin/ldconfig", "-p", "-C", cache.toString()).contains("libs found in cache"))
         expected = (expectedPaths + listOf(executable)).map(::oracle).associateBy { it.physical }
         val names = expected.values.flatMap { obj -> listOfNotNull(obj.soname, obj.requested.fileName.toString()).distinct()
             .map { it to obj.physical } }.toMap()
