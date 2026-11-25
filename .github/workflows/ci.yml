@@ -18,7 +18,7 @@ on:
 jobs:
   qualification-scope:
     name: Admit interim Linux qualification
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Reject unsupported qualification requests
         shell: python
@@ -32,7 +32,7 @@ jobs:
 
   build:
     needs: qualification-scope
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -161,6 +161,16 @@ jobs:
 
       - name: Build and test
         run: ./gradlew build
+
+      - name: Upload source test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refactorkit-source-test-reports-linux-x86_64
+          path: |
+            modules/*/build/test-results/**
+            modules/*/build/reports/cucumber/**
+          if-no-files-found: ignore
 
       - name: Run golden tests
         shell: bash
@@ -329,7 +339,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             platform: linux-x86_64
             gradle: ./gradlew
     runs-on: ${{ matrix.os }}
@@ -420,7 +430,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             platform: linux-x86_64
             gradle: ./gradlew
     runs-on: ${{ matrix.os }}

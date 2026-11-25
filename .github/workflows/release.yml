@@ -19,7 +19,7 @@ jobs:
         # V070-LOCAL-HOST-ACCEPTANCE-001 is historical; prospective 0.x tags also select Linux only.
         # The stable matrix is admitted at 1.0.0, with fresh qualification on that candidate.
         include: ${{ fromJSON((github.ref_name == 'v0.7.0' || startsWith(github.ref_name, 'v0.')) && '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"}]' || '[{"os":"ubuntu-latest","platform":"linux-x86_64","gradle":"./gradlew"},{"os":"windows-2022","platform":"windows-x86_64","gradle":"./gradlew.bat"},{"os":"macos-15-intel","platform":"macos-x86_64","gradle":"./gradlew"},{"os":"macos-15","platform":"macos-aarch64","gradle":"./gradlew"}]') }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ startsWith(github.ref_name, 'v0.8.') && 'ubuntu-24.04' || matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
