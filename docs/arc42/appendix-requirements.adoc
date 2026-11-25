@@ -20740,3 +20740,18 @@ operations in both standards with exact source images and clean shutdown.
 Evidence: .refactorkit/runs/c16-c-signature-managed-lsp-20261119-r001/
 and .refactorkit/runs/c16-signature-lsp-readback-20261119-r001/.
 Broader signature and release qualification remain open.
+
+[[lsp-initialize-workspace]]
+=== Select the workspace during LSP initialization
+
+`REQ-LSP-INITIALIZE-WORKSPACE-001` admits the nullable root URI defined by
+link:https://raw.githubusercontent.com/microsoft/language-server-protocol/gh-pages/_specifications/lsp/3.17/general/initialize.md[LSP 3.17].
+An explicit file URI selects its workspace. A null or omitted root URI selects
+the first supplied workspace folder. Initialization without either succeeds
+with no workspace scan.
+
+The link:../../features/lsp-initialize-workspace.feature[Story] checks
+both null-root paths, explicit-root precedence and an omitted root URI. It
+reads symbols through the public LSP dispatcher and verifies the two saved
+sources byte for byte. The link:../integration-contracts.md#lsp-server-baseline[LSP integration contract]
+documents the client boundary.

@@ -647,6 +647,10 @@ when that capability is absent. Structural or open-document edits require
 The LSP initialize response `serverInfo.version` is read-only metadata and uses
 the centralized implementation version.
 
+An explicit file `rootUri` takes precedence over `workspaceFolders`. A null or
+omitted `rootUri` selects the first workspace folder when supplied. A session
+with neither initializes without scanning a workspace.
+
 TypeScript/JavaScript native semantic LSP operations remain owned by the editor's
 language client. The initialize response reports this explicitly through
 `capabilities.experimental.refactorkitSemanticOwnership`; managed, rollbackable
