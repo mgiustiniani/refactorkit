@@ -53,8 +53,9 @@ class CClangToolchainRuntimeDiscoverySteps {
         Files.writeString(workspace.resolve("marker"), "unexecuted\n")
         reference = Path.of(assertNotNull(System.getProperty("refactorkit.c.qualificationToolchain")))
         clang = reference.resolve("usr/bin/clang-22"); clangd = reference.resolve("usr/bin/clangd"); formatter = reference.resolve("usr/bin/clang-format")
+        val libffi = nativeFixtureLibffi()
         originals = listOf(clang, clangd, formatter, reference.resolve("usr/lib/libclang-cpp.so.22.1"),
-            Path.of("/usr/lib/libffi.so.8"), Path.of("/etc/ld.so.cache")).associateWith(::hash)
+            libffi, Path.of("/etc/ld.so.cache")).associateWith(::hash)
         assertEquals("31a40dc31f3c15a47aa119aa148f339bf363d8f61202ddbdacbd3f24b71ba113", originals.getValue(clang))
         assertEquals("aacb4651e1886b98c5413369fc1789f4ca2d4fa5b94fdf0de4f48c98a52d4324", originals.getValue(clangd))
         assertEquals("b60fe916a9d98bfd0f317a210f6a06dfde1217ebb0b605da697ef211208d3bcf", originals.getValue(formatter))
@@ -73,7 +74,7 @@ class CClangToolchainRuntimeDiscoverySteps {
                     assertTrue(Files.isRegularFile(source, NOFOLLOW_LINKS)); Files.copy(source, target)
                 }
             } }
-            Files.copy(Path.of("/usr/lib/libffi.so.8"), tools.resolve("usr/lib/libffi.so.8"))
+            Files.copy(libffi, tools.resolve("usr/lib/libffi.so.8"))
             for (relative in relativeInputs.take(3)) {
                 val patcher = ProcessBuilder(
                     System.getenv("REFACTORKIT_TEST_PATCHELF") ?: "patchelf",
