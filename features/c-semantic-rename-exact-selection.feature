@@ -1,6 +1,6 @@
 # Requirement source: docs/releases/v0.8.0-plan.md#C06 semantic symbol rename.
 # Architecture authority: docs/arc42/appendix-requirements.adoc#c-semantic-rename-exact-selection
-@functional-requirement @partial
+@functional-requirement @partial @ci-c-rename
 Feature: Semantic C rename selects an exact declaration in a multifile family
   A textual name that occurs in several workspace files is ambiguous without a
   source location. An exact selected declaration lets clangd bind the family.

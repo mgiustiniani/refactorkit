@@ -1,3 +1,4 @@
+@ci-c-search
 Feature: Compiler-backed C declaration search on managed query surfaces
   Search keeps captured compiler context and C lookup spaces. Unavailable
   analysis is an error, never a successful empty result.

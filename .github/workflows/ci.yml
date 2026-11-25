@@ -164,7 +164,8 @@ jobs:
         run: bash scripts/prepare-maven-add-module-fixture.sh
 
       - name: Build and test
-        run: ./gradlew build
+        shell: bash
+        run: bash scripts/ci-cli-regression.sh remainder
 
       - name: Upload source test reports on failure
         if: failure()
@@ -334,6 +335,54 @@ jobs:
             modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip
             modules/refactorkit-cli/build/distributions/refactorkit-runtime.zip.sha256
             modules/refactorkit-cli/build/distributions/refactorkit-runtime.spdx.json
+          if-no-files-found: error
+
+  cli-c-regression:
+    name: C CLI regression (${{ matrix.partition }}, ${{ matrix.installation }})
+    needs: qualification-scope
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, partition: ci-c-rename, installation: installed}
+          - {os: ubuntu-24.04, partition: ci-c-search, installation: installed}
+          - {os: ubuntu-24.04, partition: ci-c-rename, installation: clean}
+          - {os: ubuntu-24.04, partition: ci-c-search, installation: clean}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21.0.11+10.0.LTS'
+          cache: gradle
+      - name: Prepare the pinned Clang 22.1.8 C qualification toolchain
+        shell: bash
+        run: bash scripts/prepare-clang-qualification-toolchain.sh
+      - name: Install CLI to user home for boundary tests
+        if: matrix.installation == 'installed'
+        shell: bash
+        run: |
+          ./gradlew :modules:refactorkit-cli:installDist
+          mkdir -p "$HOME/.local/share/refactorkit"
+          cp -r modules/refactorkit-cli/build/install/refactorkit/. "$HOME/.local/share/refactorkit/"
+      - name: Prepare CLI installation boundary for clean runner
+        if: matrix.installation == 'clean'
+        shell: bash
+        run: python3 scripts/prepare-ci-cli-boundary.py --runner-home "$HOME"
+      - name: Run C CLI regression partition
+        shell: bash
+        env:
+          CI_REGRESSION_PARTITION: ${{ matrix.partition }}
+        run: bash scripts/ci-cli-regression.sh "$CI_REGRESSION_PARTITION"
+      - name: Upload C CLI regression reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c-cli-regression-${{ matrix.partition }}-${{ matrix.installation }}
+          path: |
+            modules/refactorkit-cli/build/test-results/test/
+            modules/refactorkit-cli/build/reports/cucumber/java-preview-command-surface.json
           if-no-files-found: error
 
   maven-move-class-native:
@@ -573,7 +622,8 @@ jobs:
         run: bash scripts/prepare-maven-add-module-fixture.sh
 
       - name: Build and test
-        run: ${{ matrix.gradle }} build --no-daemon
+        shell: bash
+        run: bash scripts/ci-cli-regression.sh remainder
 
       - name: Package and native smoke
         run: ${{ matrix.gradle }} :modules:refactorkit-cli:refactorkitRuntimeZip :modules:refactorkit-cli:smokePackagedCli --no-daemon

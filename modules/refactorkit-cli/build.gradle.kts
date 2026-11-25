@@ -119,7 +119,9 @@ tasks.test {
     val defaultCucumberFilterTags = layout.projectDirectory.file("src/test/resources/cucumber-filter-tags.txt").asFile.readText().trim()
     systemProperty(
         "cucumber.filter.tags",
-        providers.systemProperty("cucumber.filter.tags").orElse(defaultCucumberFilterTags).get(),
+        providers.systemProperty("refactorkit.cli.cucumber.filter.tags")
+            .orElse(providers.systemProperty("cucumber.filter.tags"))
+            .orElse(defaultCucumberFilterTags).get(),
     )
     doFirst {
         systemProperty("refactorkit.lsp.test.classpath", sourceSets.getByName("test").runtimeClasspath.asPath)

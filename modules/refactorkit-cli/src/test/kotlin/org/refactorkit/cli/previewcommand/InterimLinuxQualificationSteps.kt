@@ -66,6 +66,99 @@ class InterimLinuxQualificationSteps {
         println("C source regression inventory: ${sourceInventory.featureCount} features, ${sourceInventory.caseCount} cases; complete runner and default-filter coverage")
     }
 
+    @Then("CI runs each admitted C regression case once in each installation configuration")
+    fun cliRegressionPartitions() {
+        val jobs = mapping(ci["jobs"])
+        val partitions = setOf("ci-c-rename", "ci-c-search")
+        for (job in listOf("build", "cross-platform-runtime")) {
+            val build = steps(mapping(jobs[job])).single { it["name"] == "Build and test" }
+            assertEquals("bash scripts/ci-cli-regression.sh remainder", build["run"])
+        }
+        val dedicated = mapping(jobs["cli-c-regression"])
+        val matrix = mapping(mapping(dedicated["strategy"])["matrix"])["include"] as List<*>
+        val assignments = matrix.map {
+            val entry = mapping(it)
+            assertEquals("ubuntu-24.04", entry["os"])
+            entry["partition"] to entry["installation"]
+        }
+        val expected = partitions.flatMap { partition -> listOf("installed", "clean").map { partition to it } }
+        assertEquals(expected.size, assignments.size)
+        assertEquals(expected.toSet(), assignments.toSet())
+        val dedicatedSteps = steps(dedicated)
+        val execute = dedicatedSteps.single { it["name"] == "Run C CLI regression partition" }
+        assertEquals("bash scripts/ci-cli-regression.sh \"\$CI_REGRESSION_PARTITION\"", execute["run"])
+        assertEquals("\${{ matrix.partition }}", mapping(execute["env"])["CI_REGRESSION_PARTITION"])
+        for ((mode, name) in listOf(
+            "installed" to "Install CLI to user home for boundary tests",
+            "clean" to "Prepare CLI installation boundary for clean runner",
+        )) {
+            val install = dedicatedSteps.single { it["name"] == name }
+            assertEquals("matrix.installation == '$mode'", install["if"])
+            assertTrue(dedicatedSteps.indexOf(install) < dedicatedSteps.indexOf(execute))
+        }
+
+        val filter = Path.of("modules/refactorkit-cli/src/test/resources/cucumber-filter-tags.txt")
+        val root = Files.createTempDirectory("rk-ci-cli-partitions-")
+        try {
+            Files.createDirectories(root.resolve(filter).parent)
+            Files.copy(repository.resolve(filter), root.resolve(filter))
+            Files.writeString(root.resolve("gradlew"), "#!/bin/sh\nprintf '%s\\n' \"\$@\"\n")
+            assertTrue(root.resolve("gradlew").toFile().setExecutable(true))
+            val expressions = (listOf("remainder") + partitions).associateWith { partition ->
+                val process = ProcessBuilder("bash", repository.resolve("scripts/ci-cli-regression.sh").toString(), partition)
+                    .directory(root.toFile()).redirectOutput(root.resolve("arguments").toFile()).start()
+                try {
+                    assertTrue(process.waitFor(20, TimeUnit.SECONDS), "CLI regression selector did not finish")
+                    assertEquals(0, process.exitValue())
+                } finally {
+                    if (process.isAlive) process.destroyForcibly().waitFor()
+                }
+                val args = Files.readAllLines(root.resolve("arguments"))
+                assertTrue("--parallel" in args)
+                if (partition == "remainder") {
+                    assertEquals("build", args.last())
+                    assertFalse("--tests" in args)
+                } else {
+                    assertEquals(
+                        listOf(":modules:refactorkit-cli:test", "--tests", JavaPreviewCommandSurfaceCucumberTest::class.java.name),
+                        args.takeLast(3),
+                    )
+                }
+                assertFalse(args.any { it.startsWith("-Dcucumber.filter.tags=") })
+                TagExpressionParser.parse(
+                    args.single { it.startsWith("-Drefactorkit.cli.cucumber.filter.tags=") }.substringAfter('='),
+                )
+            }
+            val default = TagExpressionParser.parse(Files.readString(root.resolve(filter)).trim())
+            val parser = GherkinParser.builder().includeSource(false).includeGherkinDocument(false).includePickles(true).build()
+            val covered = mutableSetOf<String>()
+            Files.list(repository.resolve("features")).use { features ->
+                features.filter { it.fileName.toString().endsWith(".feature") }.forEach { feature ->
+                    val expectedPartition = when (feature.fileName.toString()) {
+                        "c-semantic-rename-exact-selection.feature" -> "ci-c-rename"
+                        "c-compiler-symbol-search.feature" -> "ci-c-search"
+                        else -> "remainder"
+                    }
+                    parser.parse(feature).use { envelopes ->
+                        envelopes.forEach { envelope ->
+                            require(envelope.parseError.isEmpty) { envelope.parseError.toString() }
+                            envelope.pickle.ifPresent { pickle ->
+                                val tags = pickle.tags.map { it.name }
+                                val matches = expressions.filterValues { it.evaluate(tags) }.keys
+                                val expectedMatches = if (default.evaluate(tags)) setOf(expectedPartition) else emptySet()
+                                assertEquals(expectedMatches, matches, "${feature.fileName}: ${pickle.name}")
+                                covered += matches
+                            }
+                        }
+                    }
+                }
+            }
+            assertEquals(expressions.keys, covered)
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
     @Given("an interim qualification request uses {string} and {string}")
     fun request(event: String, target: String) {
         this.event = event; this.target = target

@@ -135,3 +135,10 @@ Feature: Select only the admitted host during interim qualification
       | v0.7.0  | draft                  |
       | v0.9.0  | existing public policy |
       | v1.0.0  | existing public policy |
+
+  @REQ-C-INTERIM-HOST-001#ci-partitions-slow-c-stories-without-reducing-source-regression
+  Scenario: CI partitions slow C stories without reducing source regression
+    Given an interim qualification request uses "workflow_dispatch" and "linux-x86_64"
+    When the repository workflow selects its qualification jobs
+    Then the workflow host disposition is "linux only"
+    And CI runs each admitted C regression case once in each installation configuration
