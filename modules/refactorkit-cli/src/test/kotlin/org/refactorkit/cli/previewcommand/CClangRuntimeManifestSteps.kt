@@ -162,14 +162,33 @@ class CClangRuntimeManifestSteps {
         val resolved = realPath(path)
         val text = command("/usr/bin/readelf", "-W", "-l", "-d", path.toString())
         fun field(tag: String) = Regex("\\($tag\\).*?\\[([^]]*)]").find(text)?.groupValues?.get(1)
-        val aliases = mutableListOf<ClangNativePathAlias>()
-        if (path.toString().startsWith("/lib64/")) aliases += ClangNativePathAlias(Path.of("/lib64"), Path.of(command("/usr/bin/readlink", "/lib64").trim()))
-        if (Files.isSymbolicLink(path)) aliases += ClangNativePathAlias(path, Path.of(command("/usr/bin/readlink", path.toString()).trim()))
+        val aliases = oracleAliases(path, resolved)
         assertTrue(text.contains("Elf file type is DYN"))
         return ObjectOracle(path, resolved, hash(path), Files.size(path),
             Regex("\\(NEEDED\\).*?\\[([^]]*)]").findAll(text).map { it.groupValues[1] }.toList(),
             Regex("Requesting program interpreter: ([^]]+)]").find(text)?.groupValues?.get(1),
             field("SONAME"), field("RPATH"), field("RUNPATH"), aliases)
+    }
+
+    private fun oracleAliases(path: Path, resolved: Path): List<ClangNativePathAlias> {
+        val aliases = mutableListOf<ClangNativePathAlias>()
+        fun resolve(input: Path): Path {
+            var parent = requireNotNull(input.root)
+            for (part in input) {
+                val component = parent.resolve(part).normalize()
+                parent = if (Files.isSymbolicLink(component)) {
+                    assertTrue(aliases.size < 64, "Host oracle encountered too many aliases: $path")
+                    val target = Files.readSymbolicLink(component)
+                    aliases.add(ClangNativePathAlias(component, target))
+                    resolve(parent.resolve(target))
+                } else {
+                    component
+                }
+            }
+            return parent
+        }
+        assertEquals(resolved, resolve(path))
+        return aliases
     }
 
     /** Independent host-runtime oracle: invokes only the fixed system loader's `--list` mode. */
