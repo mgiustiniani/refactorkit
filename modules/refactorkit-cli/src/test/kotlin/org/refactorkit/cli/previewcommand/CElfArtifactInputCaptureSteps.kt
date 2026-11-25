@@ -54,14 +54,19 @@ class CElfArtifactInputCaptureSteps {
         when (case) {
             "direct target" -> { selected = toolchain.resolve("usr/bin/clangd"); reference = selected; role = ClangArtifactRole.CLANGD }
             "directory alias" -> {
-                selected = Path.of("/lib64/ld-linux-x86-64.so.2"); reference = Path.of(command("/usr/bin/readlink", "-f", selected.toString()).trim())
+                reference = Path.of("/lib64/ld-linux-x86-64.so.2").toRealPath()
                 role = ClangArtifactRole.INTERPRETER
-                expectedAliases = listOf(ClangNativePathAlias(Path.of("/lib64"), Path.of(command("/usr/bin/readlink", "/lib64").trim())))
+                val directory = workspace.resolve("loader-directory")
+                Files.createSymbolicLink(directory, reference.parent)
+                selected = directory.resolve(reference.fileName)
+                expectedAliases = listOf(ClangNativePathAlias(directory, reference.parent))
             }
             "leaf alias" -> {
-                selected = Path.of("/usr/lib/libstdc++.so.6"); reference = Path.of(command("/usr/bin/readlink", "-f", selected.toString()).trim())
+                reference = nativeFixtureLibffi().toRealPath()
                 role = ClangArtifactRole.SHARED_LIBRARY
-                expectedAliases = listOf(ClangNativePathAlias(selected, Path.of(command("/usr/bin/readlink", selected.toString()).trim())))
+                selected = workspace.resolve("library.so")
+                Files.createSymbolicLink(selected, reference)
+                expectedAliases = listOf(ClangNativePathAlias(selected, reference))
             }
             "retargeted alias" -> {
                 reference = copiedReference; role = ClangArtifactRole.FORMATTER
