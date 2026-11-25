@@ -33,6 +33,14 @@ application {
     applicationName = "refactorkit"
 }
 
+distributions {
+    main {
+        contents {
+            from(rootProject.layout.projectDirectory.file("LICENSE"))
+        }
+    }
+}
+
 dependencies {
     implementation(project(":modules:refactorkit-core"))
     implementation(project(":modules:refactorkit-java"))
