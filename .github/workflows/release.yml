@@ -212,6 +212,11 @@ jobs:
         shell: bash
         run: python3 scripts/prepare-ci-cli-boundary.py --runner-home "$HOME"
 
+      - name: Prepare offline Maven Add Module fixture repository
+        if: startsWith(github.ref_name, 'v0.8.')
+        shell: bash
+        run: bash scripts/prepare-maven-add-module-fixture.sh
+
       - name: Clean v0.8 build and complete standard regression
         if: startsWith(github.ref_name, 'v0.8.')
         shell: bash

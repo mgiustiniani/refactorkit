@@ -159,6 +159,10 @@ jobs:
           mkdir -p "$HOME/.local/share/refactorkit"
           cp -r modules/refactorkit-cli/build/install/refactorkit/. "$HOME/.local/share/refactorkit/"
 
+      - name: Prepare offline Maven Add Module fixture repository
+        shell: bash
+        run: bash scripts/prepare-maven-add-module-fixture.sh
+
       - name: Build and test
         run: ./gradlew build
 
@@ -563,6 +567,10 @@ jobs:
       - name: Prepare CLI installation boundary for clean runner
         shell: bash
         run: python3 scripts/prepare-ci-cli-boundary.py --runner-home "$HOME"
+
+      - name: Prepare offline Maven Add Module fixture repository
+        shell: bash
+        run: bash scripts/prepare-maven-add-module-fixture.sh
 
       - name: Build and test
         run: ${{ matrix.gradle }} build --no-daemon

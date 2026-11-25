@@ -106,27 +106,11 @@ class JavaEffectiveProjectContextSteps {
         addModuleOutsidePath = owned.resolve("outside")
         addModuleStructuralContext = null
         Files.createDirectories(root.resolve("fixture-repository"))
-        write(root.resolve("pom.xml"), """
-            <project><modelVersion>4.0.0</modelVersion><groupId>fixture.addmodule</groupId>
-              <artifactId>declared-parent-artifact</artifactId><version>2.7.1</version><packaging>pom</packaging>
-              <properties><maven.compiler.release>8</maven.compiler.release></properties>
-              <build><plugins>
-                <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-resources-plugin</artifactId><version>3.5.0</version></plugin>
-                <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.13.0</version></plugin>
-                <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.6</version></plugin>
-                <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><version>3.5.1</version></plugin>
-              </plugins></build>
-              <modules><module>occupied</module></modules>
-            </project>
-        """.trimIndent() + "\n")
-        write(root.resolve("occupied/pom.xml"), """
-            <project><modelVersion>4.0.0</modelVersion>
-              <parent><groupId>fixture.addmodule</groupId><artifactId>declared-parent-artifact</artifactId>
-                <version>2.7.1</version><relativePath>../pom.xml</relativePath></parent>
-              <artifactId>occupied</artifactId>
-            </project>
-        """.trimIndent() + "\n")
-        write(root.resolve("occupied/src/main/java/fixture/Existing.java"), "package fixture; class Existing {}\n")
+        val projectFiles = listOf("pom.xml", "occupied/pom.xml", "occupied/src/main/java/fixture/Existing.java")
+        for (relative in projectFiles) {
+            val resource = requireNotNull(javaClass.getResourceAsStream("/maven-add-module-fixture/$relative"))
+            write(root.resolve(relative), resource.bufferedReader().use { it.readText() })
+        }
         write(root.resolve("settings.gradle"), "rootProject.name='add-module-partial-context'; include 'gradle-observer'\n")
         write(root.resolve("gradle-observer/build.gradle"), "apply plugin: 'java'\n")
         write(root.resolve("gradle-observer/src/main/java/observer/Observer.java"),
@@ -288,7 +272,8 @@ class JavaEffectiveProjectContextSteps {
         write(settings, "<settings/>\n")
         val globalSettings = owned.resolve("empty-maven-global-settings.xml")
         write(globalSettings, "<settings/>\n")
-        val repositorySource = Path.of(System.getProperty("user.home"), ".m2", "repository")
+        val repositorySource = System.getenv("REFACTORKIT_MAVEN_ADD_MODULE_REPOSITORY")?.let(Path::of)
+            ?: Path.of(System.getProperty("user.home"), ".m2", "repository")
         if (!Files.isDirectory(repositorySource, LinkOption.NOFOLLOW_LINKS)) {
             addModuleOfflineBuildOutput = "Offline Maven repository is unavailable"
             return -2
